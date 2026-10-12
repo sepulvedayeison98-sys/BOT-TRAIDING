@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 8 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
+> Estado: **Fase 9 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -114,3 +114,7 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 
 ### Fase 8 — 2026-10-12
 `Test_Phase8.mq5` → **34 passed, 0 failed**: clasificación (NFP, CPI, PCE, FOMC, tasas, Powell, empleo, otros USD, baja importancia), límites exactos de las ventanas 30/30 y 20/20, próximo evento, fuente no válida / desactualizada / fuera de cobertura → bloqueo, política desactivable (informa sin bloquear), CSV del tester (carga, filtro, cobertura, sin `#range`, sin archivo), calendario no disponible sin conexión → bloqueo. La prueba encontró un bug (eventos no relevantes inyectados bloqueaban) que se corrigió.
+
+### Fase 9 — 2026-10-12
+- `Test_Phase9.mq5` → **41 passed, 0 failed**: SHA-256 de MQL5 idéntico al de Python (respuesta conocida), modelo aprobado se carga y aplica, sin modelo → valores por defecto, alterado → rechazado, sin aprobación → rechazado, clave de riesgo o de ejecución → rechazado entero, valor inválido → no se aplica nada, métricas calculadas a mano, filtros, diario CSV (cabecera = la de challenger.py, fila, R, contexto, huérfanas), persistencia del contexto de entrada, reporte.
+- `Tools/tests/test_challenger.py` → **16 tests OK** (23 en total con las de regime_report): métricas a mano, Challenger mejor → recomendado, sobreajustado → rechazado, muestra pequeña → rechazado, mejora no significativa → rechazado, lista blanca igual a la del EA, sin claves de riesgo, hash del modelo, clave prohibida, `approve` exige `--i-approve`, fechas de walk-forward, archivos .ini/.set.

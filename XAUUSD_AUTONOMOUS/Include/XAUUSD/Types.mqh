@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.8.0"
+#define XAU_PROJECT_VERSION "0.9.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -435,6 +435,56 @@ struct NewsState
    string            next_name;
    datetime          next_time;
    int               minutes_to_next;   // -1 si no hay próximo evento relevante
+  };
+
+//--- Registro completo de una operación (diario de operaciones)
+struct TradeRecord
+  {
+   string            run_tag;
+   long              identifier;
+   string            signal_id;
+   string            setup_key;
+   ENUM_STRATEGY_ID  strategy;
+   ENUM_DIRECTION    direction;
+   ENUM_SESSION_ID   session;
+   ENUM_REGIME       regime;
+   double            score;
+   datetime          open_time;
+   datetime          close_time;
+   double            volume;
+   double            entry_price;
+   double            exit_price;
+   double            initial_sl;
+   double            tp;
+   double            risk_money;
+   double            profit;
+   double            commission;
+   double            swap;
+   double            net;
+   double            r_multiple;
+   double            slippage_points;
+   double            spread_points;
+  };
+
+//--- Métricas de rendimiento de un conjunto de operaciones
+struct PerfStats
+  {
+   int               trades;
+   int               wins;
+   int               losses;
+   double            gross_profit;
+   double            gross_loss;      // positivo
+   double            net;
+   double            profit_factor;   // 0 si no hay pérdidas ni ganancias; DBL_MAX si no hay pérdidas
+   double            win_rate;
+   double            expectancy;      // neto medio por operación (moneda)
+   double            expectancy_r;    // R medio por operación
+   double            max_drawdown;    // máximo retroceso de la curva acumulada (moneda)
+   int               max_loss_streak;
+   double            commission;
+   double            swap;
+   double            avg_slippage;
+   double            avg_rr_realized; // ganancia media / pérdida media
   };
 
 //--- Utilidades de texto

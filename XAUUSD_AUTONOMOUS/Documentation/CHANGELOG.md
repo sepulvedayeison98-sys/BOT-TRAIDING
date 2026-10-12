@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.0] - 2026-10-12 — Fase 9: aprendizaje controlado
+### Añadido
+- `LearningEngine.mqh` (Champion): diario de operaciones, métricas, carga verificada del modelo con lista blanca.
+- `Tools/challenger.py` (Challenger offline) y `Tools/tests/test_challenger.py`.
+- Tipos `TradeRecord`, `PerfStats`. `Test_Phase9.mq5` (41/41).
+
 ## [0.8.0] - 2026-10-12 — Fase 8: noticias
 ### Añadido
 - `NewsManager.mqh` (calendario MT5 en vivo, CSV en tester, ventanas por prioridad, política conservadora D3), tipos `NewsEvent`/`NewsState`.

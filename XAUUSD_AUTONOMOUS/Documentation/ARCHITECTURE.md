@@ -451,6 +451,11 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 - **Challenger (fuera del EA, `Tools/`):** Python lee los logs/CSVs, lanza el Strategy Tester por línea de comandos con configuraciones candidatas, ejecuta IS/OOS/walk-forward, y produce un reporte comparativo con penalización por sobreajuste, inestabilidad y drawdown.
 - **Promoción:** solo tú, editando/aprobando el fichero de modelo (o un comando explícito documentado). Nunca automática.
 
+**Implementado (Fase 9):** `LearningEngine.mqh` (diario de operaciones CSV con contexto, métricas por estrategia/sesión/régimen/día, carga del modelo `<Common>/Files/XAUUSD/champion.model`) y `Tools/challenger.py` (`report`, `compare`, `approve`, `folds`).
+- Formato del modelo: líneas `clave=valor` con `version`, `approved=yes`, `approved_by`, `approved_at`, parámetros de la lista blanca y `sha256=` del cuerpo (todas las líneas anteriores con `\n`). Lista blanca idéntica en MQL5 y Python (verificado por prueba). Cualquier clave fuera de ella invalida el modelo entero.
+- `ApplyChampion` recibe solo configuraciones de régimen, puntuación y estrategias: **no puede** tocar riesgo, ejecución, posiciones ni noticias. Si un valor deja una configuración inválida no se aplica nada.
+- Criterios de `compare` para recomendar promoción: ≥ 100 operaciones OOS, esperanza OOS > 0, PF OOS ≥ 1.2, ≥ 2/3 de pliegues OOS positivos, drawdown OOS ≤ 1.2 × el del Champion, puntuación robusta (esperanza OOS − 0.5·degradación IS→OOS − 0.5·dispersión entre pliegues − 0.02·DD en R) mayor que la del Champion e IC 95 % bootstrap de la mejora por encima de 0. Aun así la promoción exige `approve --i-approve`.
+
 ## 15. Dashboard
 
 - **MT5 (Fase 10):** objetos de gráfico (`OBJ_LABEL`, `OBJ_BUTTON`, `OBJ_RECTANGLE_LABEL`) actualizados en `OnTimer` (no en cada tick). Botones: pausar/reanudar entradas, modo seguro, cerrar todas (**doble clic de confirmación en < 5 s**, no `MessageBox`, que bloquea el hilo), abrir carpeta de logs (mostrar ruta).
