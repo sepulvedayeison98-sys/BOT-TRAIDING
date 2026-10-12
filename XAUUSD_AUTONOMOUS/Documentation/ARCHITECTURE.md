@@ -45,6 +45,8 @@ XAUUSD_AUTONOMOUS/
 │   ├── StateStore.mqh       (*) persistencia atómica de estado
 │   ├── MarketEngine.mqh
 │   ├── RegimeEngine.mqh
+│   ├── PatternLib.mqh       (*) detección de patrones compartida (Fase 4)
+│   ├── StrategyBase.mqh     (*) base de estrategias: SL/TP, confirmación M5, invariantes (Fase 4)
 │   ├── StrategySMC.mqh
 │   ├── StrategyBreakout.mqh
 │   ├── StrategyReversal.mqh
@@ -61,6 +63,8 @@ XAUUSD_AUTONOMOUS/
 ├── Tools/                   (*) scripts Python offline (Challenger, reportes)
 └── Documentation/
 ```
+
+`PatternLib` y `StrategyBase` se añadieron en la Fase 4 para cumplir "no duplicar lógica entre módulos": barridos, rupturas, FVG y construcción de SL/TP los usan varias estrategias.
 
 `(*)` = **módulos adicionales propuestos** que no estaban en la lista original. Justificación:
 - `Types.mqh`: evita dependencias circulares y duplicación de structs entre módulos.
@@ -396,7 +400,8 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 11. **ONNX**: MQL5 soporta modelos ONNX (según mi conocimiento, desde builds de 2023 — verificar). Posible vía futura para un modelo del Challenger, siempre como filtro de estrategia, nunca de riesgo.
 12. **`TimeCurrent()` no es "ahora"**: devuelve la hora del último tick conocido (en fin de semana o sin conexión puede ser de días antes; en la Fase 2 se observó 2024-08-23 con el terminal desconectado). Para la hora actual del servidor se usa `TimeTradeServer()`.
 13. **El Strategy Tester exige una cuenta**: aunque el símbolo sea personalizado, el tester no arranca si el terminal no tiene una cuenta configurada (observado en Fase 3). Las pruebas en tester se ejecutan en tu terminal.
-14. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
+14. **Símbolos personalizados (solo pruebas)**: `CustomTicksAdd` reescribe la vela que contiene el tick como vela plana. Las pruebas que comparan series lo evitan.
+15. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
 
 ---
 

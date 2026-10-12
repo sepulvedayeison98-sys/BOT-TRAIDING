@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0] - 2026-10-12 — Fase 4: estrategias
+### Añadido
+- `PatternLib.mqh` (barrido, BOS/CHoCH, FVG, Order Block, caja de consolidación, divergencia RSI, rechazo, rango asiático) y `StrategyBase.mqh` (SL/TP, confirmación M5, invariantes, IDs).
+- `StrategySMC.mqh`, `StrategyBreakout.mqh`, `StrategyReversal.mqh`: señales `TradeSignal` con dirección, zona, invalidación, SL, TP, R:R, motivo, evidencia estructurada y clave de setup.
+- `MarketEngine.UpdateAt()`: instantánea histórica sin mirar el futuro (mismo código que en vivo).
+- `Test_Phase4.mq5`, `Test_Strategies_Replay.mq5`, `Tools/run_all_tests.sh`.
+
+### Cambiado
+- MarketEngine copia datos por posición a partir del instante de decisión (apertura de la vela M5).
+- `Test_RegimeEngine_Custom` mide proporciones sobre 600 instantes (era frágil con un solo instante).
+- `RegimeEngine.Classify()` inicializa todos los campos del estado.
+
+### Pruebas
+- MQL5: Fase 4 100/100, reproducción 27/27, regresión completa en verde. Python 7/7.
+
 ## [0.3.0] - 2026-10-12 — Fase 3: régimen de mercado
 ### Añadido
 - `Include/XAUUSD/RegimeEngine.mqh`: clasificación TREND_UP / TREND_DOWN / RANGE / HIGH_VOLATILITY / NO_TRADE con umbrales configurables y validados al iniciar, motivo legible de cada decisión, distancias a pivotes H1, límites de rango M15 e histéresis (salida inmediata a estados de seguridad, confirmación para el resto).

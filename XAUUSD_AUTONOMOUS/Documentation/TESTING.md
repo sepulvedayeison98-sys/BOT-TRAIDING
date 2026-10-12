@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 3 completada**. Resultados registrados en §7.
+> Estado: **Fase 4 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -84,3 +84,17 @@ Beneficio neto, profit factor, DD máximo (monetario y %), expectativa por opera
 **Defecto metodológico encontrado y corregido:** la primera versión del reporte correlacionaba la posición en el rango con retornos solapados. La prueba con caminata aleatoria la marcó como "reversión consistente" (regresión espuria: la posición es muy persistente). Ahora se usan retornos no solapados y retorno firmado desde los extremos; falsos positivos medidos en caminatas aleatorias: TREND_UP 2/60, TREND_DOWN 2/60, RANGE 1/60.
 
 **Limitación:** el Strategy Tester de MT5 no arranca sin una cuenta conectada ("tester not started because the account is not specified"), así que el ensayo `RegimeLogger` en tester solo puedes ejecutarlo tú.
+
+### Fase 4 — 2026-10-12
+
+| Archivo | Ejecución |
+|---|---|
+| `Test_Phase4.mq5`: primitivas (barrido, ruptura, FVG, OB, caja, divergencia, rechazo, rango asiático) y un escenario completo por estrategia construido vela a vela, con SL/TP/niveles calculados a mano; cada escenario también **en espejo** (compra↔venta); casos negativos (régimen, zona no tocada, FVG rellenado → OB, falsa ruptura, volumen obligatorio, confirmaciones insuficientes, sin CHoCH) | **100 passed, 0 failed** |
+| `Test_Strategies_Replay.mq5`: (1) **sin mirar el futuro**: `UpdateAt(D)` idéntico (precios e indicadores en H1/M15/M5) en un símbolo completo y en una copia que termina en D; (2) `Update()` en vivo == `UpdateAt(apertura M5 actual)`; (3) reproducción de 4 × 1.500 velas M5 por régimen + 3 estrategias: 0 señales que violen invariantes | **27 passed, 0 failed** |
+| `Test_RegimeEngine_Custom.mq5` rehecho como medida estadística sobre 600 instantes (antes dependía de un solo instante y era frágil) | **19 passed, 0 failed** |
+
+Medida de la debilidad del ADX: en la oscilación lateral sintética, la regla clasificó **12 %** de los instantes como tendencia (10 % alcista, 2 % bajista). Las series en tendencia: 100 %.
+
+**Hallazgos de la fase:**
+- `CustomTicksAdd` reescribe como vela plana (O=H=L=C) la vela que contiene el tick. Afectaba a la copia "sin futuro" del test; se añadió `add_tick=false` al helper. No afecta a datos del bróker.
+- MarketEngine copia por posición (`iBarShift` + `CopyRates`/`CopyBuffer` con el mismo índice) y verifica que la vela esté cerrada en el instante de decisión.

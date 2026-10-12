@@ -174,8 +174,20 @@ public:
 
    ENUM_REGIME       Current(void) const { return m_stable; }
 
-   //--- Clasificación instantánea, sin estado (pura → testeable).
+   //--- Clasificación instantánea, sin estado (pura → testeable). Sin histéresis:
+   //--- st.regime = st.raw_regime y evaluations_in_regime = 0.
    static ENUM_REGIME Classify(const MarketSnapshot &s, const RegimeConfig &c, RegimeState &st)
+     {
+      ENUM_REGIME r = ClassifyRaw(s, c, st);
+      st.raw_regime = r;
+      st.regime = r;
+      st.evaluations_in_regime = 0;
+      st.evaluated_at = s.server_time;
+      return r;
+     }
+
+private:
+   static ENUM_REGIME ClassifyRaw(const MarketSnapshot &s, const RegimeConfig &c, RegimeState &st)
      {
       st.raw_regime = REGIME_NO_TRADE;
       st.h1_adx = 0.0;
@@ -297,6 +309,7 @@ public:
       return REGIME_NO_TRADE;
      }
 
+public:
    //--- Clasificación con histéresis. Devuelve el régimen estable.
    ENUM_REGIME       Evaluate(const MarketSnapshot &s, RegimeState &st)
      {

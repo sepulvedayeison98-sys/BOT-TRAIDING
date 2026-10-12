@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.3.0"
+#define XAU_PROJECT_VERSION "0.4.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -162,7 +162,96 @@ struct RegimeState
    double            dist_swing_low_atr;  // distancia al pivote bajo H1 por debajo del precio, en ATR H1 (-1 = no hay)
   };
 
+//--- Evento de ruptura de estructura
+enum ENUM_STRUCT_EVENT
+  {
+   SE_NONE = 0,
+   SE_BOS,        // ruptura a favor de la estructura vigente
+   SE_CHOCH,      // ruptura contra la estructura vigente (cambio de carácter)
+   SE_BREAK       // ruptura con estructura previa mixta o desconocida
+  };
+
+//--- Evidencia técnica estructurada de una señal (la usa AdaptiveEngine para puntuar)
+struct SignalEvidence
+  {
+   bool              sweep;                // barrido de liquidez
+   double            sweep_level;          // nivel barrido
+   double            sweep_extreme;        // extremo de la mecha del barrido
+   bool              sweep_session_level;  // el nivel barrido coincide con un extremo de la sesión asiática
+   ENUM_STRUCT_EVENT m15_event;            // ruptura de estructura en M15
+   double            m15_event_level;
+   bool              fvg;                  // zona de interés es un FVG
+   bool              order_block;          // zona de interés es un Order Block
+   bool              discount_premium_ok;  // compra en descuento / venta en premium
+   bool              m5_rejection;         // vela M5 de rechazo
+   bool              m5_break;             // ruptura de estructura en M5
+   bool              m15_rejection;        // vela M15 de rechazo (reversión)
+   bool              rsi_divergence;       // divergencia RSI M15
+   bool              extension;            // sobreextensión respecto a la EMA rápida
+   bool              consolidation;        // caja de consolidación detectada (breakout)
+   bool              volume_expansion;     // tick volume de la ruptura sobre la media
+   bool              volume_available;     // el bróker provee tick volume utilizable
+   bool              retest;               // entrada por retest (breakout)
+   int               confirmations;        // condiciones cumplidas (reversión)
+   double            poi_low;              // zona de interés (OB/FVG/borde de caja)
+   double            poi_high;
+  };
+
+//--- Señal estructurada y explicable producida por una estrategia
+struct TradeSignal
+  {
+   string            signal_id;
+   string            setup_key;      // identifica la oportunidad (no cambia entre velas) para deduplicar
+   ENUM_STRATEGY_ID  strategy;
+   ENUM_DIRECTION    direction;
+   ENUM_TIMEFRAMES   origin_tf;      // temporalidad donde se forma el setup
+   double            entry_low;      // zona de entrada
+   double            entry_high;
+   double            entry_price;    // referencia: cierre de la vela M5 de confirmación
+   double            invalidation;   // nivel estructural que invalida la idea
+   double            sl;
+   double            tp;
+   double            rr;             // |tp - entry| / |entry - sl|
+   datetime          created;        // hora del servidor
+   datetime          expires;
+   string            reason;
+   string            evidence_text;
+   SignalEvidence    evidence;
+  };
+
 //--- Utilidades de texto
+string EnumStrategyToString(const ENUM_STRATEGY_ID s)
+  {
+   switch(s)
+     {
+      case STRAT_SMC:      return "SMC";
+      case STRAT_BREAKOUT: return "BREAKOUT";
+      case STRAT_REVERSAL: return "REVERSAL";
+      default:             return "NONE";
+     }
+  }
+
+string EnumDirectionToString(const ENUM_DIRECTION d)
+  {
+   switch(d)
+     {
+      case DIR_LONG:  return "LONG";
+      case DIR_SHORT: return "SHORT";
+      default:        return "NONE";
+     }
+  }
+
+string EnumStructEventToString(const ENUM_STRUCT_EVENT e)
+  {
+   switch(e)
+     {
+      case SE_BOS:   return "BOS";
+      case SE_CHOCH: return "CHOCH";
+      case SE_BREAK: return "BREAK";
+      default:       return "NONE";
+     }
+  }
+
 string EnumRegimeToString(const ENUM_REGIME r)
   {
    switch(r)

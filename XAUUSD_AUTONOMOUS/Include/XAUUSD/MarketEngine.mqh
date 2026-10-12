@@ -5,8 +5,16 @@
 //| spread. NO ejecuta operaciones ni decide entradas.               |
 //|                                                                  |
 //| Convención: todas las series son "as series" e índice 0 = última |
-//| vela CERRADA (shift 1 del gráfico). La vela en formación nunca   |
-//| se usa para indicadores ni estructura.                           |
+//| vela CERRADA en el instante de decisión. La vela en formación    |
+//| nunca se usa para indicadores ni estructura.                     |
+//|                                                                  |
+//| Instante de decisión = apertura de la vela M5 actual. Para cada  |
+//| TF se copian, por posición (iBarShift), las velas abiertas en o  |
+//| antes de (decisión - período): las ya cerradas en ese instante.  |
+//| (CopyRates por fecha dio resultados incorrectos con símbolos     |
+//| personalizados en pruebas; por posición es consistente.)         |
+//| El mismo camino sirve en vivo (Update) y para reconstruir un     |
+//| instante histórico (UpdateAt) sin mirar el futuro.               |
 //+------------------------------------------------------------------+
 #ifndef XAUUSD_MARKETENGINE_MQH
 #define XAUUSD_MARKETENGINE_MQH
@@ -334,11 +342,12 @@ private:
          PrintFormat("[%s][%s] %s", ME_MODULE, event, msg);
      }
 
-   bool              CopySeries(const int handle, const int buffer, const int count, double &dst[], string &reason)
+   bool              CopySeries(const int handle, const int buffer, const int shift, const int count,
+                                double &dst[], string &reason)
      {
       ArraySetAsSeries(dst, true);
       ResetLastError();
-      int got = CopyBuffer(handle, buffer, 1, count, dst);
+      int got = CopyBuffer(handle, buffer, shift, count, dst);
       if(got != count)
         {
          reason = StringFormat("CopyBuffer devolvió %d de %d (err=%d)", got, count, GetLastError());
@@ -358,7 +367,9 @@ private:
       return true;
      }
 
-   bool              FillTF(const int idx, TFData &d)
+   //--- decision_time: apertura de la vela M5 en la que se decide.
+   //--- freshness_ref: hora contra la que se mide la frescura (en vivo, la hora del servidor).
+   bool              FillTF(const int idx, TFData &d, const datetime decision_time, const datetime freshness_ref)
      {
       string reason = "";
       ENUM_TIMEFRAMES tf = m_tfs[idx];
@@ -379,19 +390,35 @@ private:
          d.invalid_reason = tfname + ": historial no sincronizado";
          return false;
         }
-      int bars = Bars(m_cfg.symbol, tf);
+      long period = PeriodSeconds(tf);
+      datetime start = decision_time - (datetime)period;   // última vela que ya cerró en decision_time
+      datetime first = (datetime)SeriesInfoInteger(m_cfg.symbol, tf, SERIES_FIRSTDATE);
+      int bars = (first > 0 && first <= start) ? Bars(m_cfg.symbol, tf, first, start) : 0;
       if(bars < m_cfg.min_history_bars)
         {
-         d.invalid_reason = StringFormat("%s: historial insuficiente (%d < %d)", tfname, bars, m_cfg.min_history_bars);
+         d.invalid_reason = StringFormat("%s: historial insuficiente antes de %s (%d < %d)", tfname,
+                                         TimeToString(start), bars, m_cfg.min_history_bars);
          return false;
         }
-      //--- velas cerradas
+      //--- velas cerradas: índice de la última vela abierta en o antes de `start`.
+      //--- Se copia por posición (precios e indicadores con el mismo índice).
+      int shift = iBarShift(m_cfg.symbol, tf, start, false);
+      if(shift < 0)
+        {
+         d.invalid_reason = StringFormat("%s: iBarShift falló para %s (err=%d)", tfname, TimeToString(start), GetLastError());
+         return false;
+        }
       ArraySetAsSeries(d.rates, true);
       ResetLastError();
-      int got = CopyRates(m_cfg.symbol, tf, 1, need, d.rates);
+      int got = CopyRates(m_cfg.symbol, tf, shift, need, d.rates);
       if(got != need)
         {
          d.invalid_reason = StringFormat("%s: CopyRates %d/%d (err=%d)", tfname, got, need, GetLastError());
+         return false;
+        }
+      if(d.rates[0].time > start)
+        {
+         d.invalid_reason = StringFormat("%s: vela no cerrada en el instante de decisión", tfname);
          return false;
         }
       if(!CMarketAlgo::ValidateRates(d.rates, need, reason))
@@ -399,14 +426,12 @@ private:
          d.invalid_reason = tfname + ": " + reason;
          return false;
         }
-      //--- frescura: la vela cerrada más reciente debe ser la anterior a la actual
-      datetime now = TimeTradeServer();
-      long period = PeriodSeconds(tf);
+      //--- frescura: la última vela cerrada debe terminar cerca del instante de referencia
       datetime expected_close = d.rates[0].time + (datetime)period;
-      if((double)(now - expected_close) > m_cfg.stale_bar_factor * (double)period)
+      if((double)(freshness_ref - expected_close) > m_cfg.stale_bar_factor * (double)period)
         {
-         d.invalid_reason = StringFormat("%s: datos desactualizados (última vela cerrada %s, servidor %s)",
-                                         tfname, TimeToString(d.rates[0].time), TimeToString(now));
+         d.invalid_reason = StringFormat("%s: datos desactualizados (última vela cerrada %s, referencia %s)",
+                                         tfname, TimeToString(d.rates[0].time), TimeToString(freshness_ref));
          return false;
         }
       //--- indicadores
@@ -420,13 +445,13 @@ private:
          d.invalid_reason = tfname + ": " + reason;
          return false;
         }
-      if(!CopySeries(m_h_ema_fast[idx], 0, need, d.ema_fast, reason) ||
-         !CopySeries(m_h_ema_slow[idx], 0, need, d.ema_slow, reason) ||
-         !CopySeries(m_h_rsi[idx], 0, need, d.rsi, reason) ||
-         !CopySeries(m_h_adx[idx], 0, need, d.adx, reason) ||       // MAIN_LINE
-         !CopySeries(m_h_adx[idx], 1, need, d.plus_di, reason) ||   // PLUSDI_LINE
-         !CopySeries(m_h_adx[idx], 2, need, d.minus_di, reason) ||  // MINUSDI_LINE
-         !CopySeries(m_h_atr[idx], 0, need, d.atr, reason))
+      if(!CopySeries(m_h_ema_fast[idx], 0, shift, need, d.ema_fast, reason) ||
+         !CopySeries(m_h_ema_slow[idx], 0, shift, need, d.ema_slow, reason) ||
+         !CopySeries(m_h_rsi[idx], 0, shift, need, d.rsi, reason) ||
+         !CopySeries(m_h_adx[idx], 0, shift, need, d.adx, reason) ||       // MAIN_LINE
+         !CopySeries(m_h_adx[idx], 1, shift, need, d.plus_di, reason) ||   // PLUSDI_LINE
+         !CopySeries(m_h_adx[idx], 2, shift, need, d.minus_di, reason) ||  // MINUSDI_LINE
+         !CopySeries(m_h_atr[idx], 0, shift, need, d.atr, reason))
         {
          d.invalid_reason = tfname + ": " + reason;
          return false;
@@ -457,6 +482,64 @@ private:
       CMarketAlgo::RangeOf(d.rates, need, d.range_high, d.range_low);
       d.valid = true;
       d.invalid_reason = "";
+      return true;
+     }
+
+   bool              BeginSnapshot(MarketSnapshot &snap)
+     {
+      snap.valid = false;
+      snap.symbol = m_cfg.symbol;
+      snap.invalid_reason = "";
+      if(!m_ready)
+        {
+         snap.invalid_reason = "MarketEngine no inicializado";
+         return false;
+        }
+      //--- protección ante cambio de especificación del símbolo
+      int digits = (int)SymbolInfoInteger(m_cfg.symbol, SYMBOL_DIGITS);
+      double point = SymbolInfoDouble(m_cfg.symbol, SYMBOL_POINT);
+      if(digits != m_init_digits || point != m_init_point)
+        {
+         snap.invalid_reason = StringFormat("especificación del símbolo cambió (digits %d->%d, point %g->%g)",
+                                            m_init_digits, digits, m_init_point, point);
+         LogMsg(LOG_CRITICAL, "SYMBOL_SPEC_CHANGED", snap.invalid_reason);
+         return false;
+        }
+      snap.digits = digits;
+      snap.point = point;
+      return true;
+     }
+
+   bool              SetTime(MarketSnapshot &snap)
+     {
+      if(!m_clock.OffsetValid())
+        {
+         snap.invalid_reason = "offset horario inválido: " + m_clock.LastError();
+         return false;
+        }
+      snap.utc_time = m_clock.ServerToUtc(snap.server_time);
+      snap.session = m_clock.SessionAtUtc(snap.utc_time);
+      return true;
+     }
+
+   bool              FillAll(MarketSnapshot &snap, const datetime decision, const datetime freshness_ref,
+                             const bool live)
+     {
+      bool ok_h1 = FillTF(0, snap.h1, decision, freshness_ref);
+      bool ok_m15 = FillTF(1, snap.m15, decision, freshness_ref);
+      bool ok_m5 = FillTF(2, snap.m5, decision, freshness_ref);
+      //--- spread de referencia
+      snap.spread_avg_points = CMarketAlgo::AverageRatesSpread(snap.m5.rates, MathMin(m_cfg.spread_avg_bars, snap.m5.bars));
+      if(live && snap.spread_avg_points <= 0.0 && m_tick_spread_samples >= 100)
+         snap.spread_avg_points = m_tick_spread_ema;
+      snap.spread_ratio = (snap.spread_avg_points > 0.0) ? snap.spread_points / snap.spread_avg_points : 0.0;
+      if(!ok_h1 || !ok_m15 || !ok_m5)
+        {
+         snap.invalid_reason = (!ok_h1 ? snap.h1.invalid_reason :
+                                (!ok_m15 ? snap.m15.invalid_reason : snap.m5.invalid_reason));
+         return false;
+        }
+      snap.valid = true;
       return true;
      }
 
@@ -582,38 +665,14 @@ public:
       m_tick_spread_samples++;
      }
 
-   //--- Construye la instantánea completa. Devuelve snap.valid.
+   //--- Instantánea en vivo. Instante de decisión = apertura de la vela M5 actual.
    bool              Update(MarketSnapshot &snap)
      {
-      snap.valid = false;
-      snap.symbol = m_cfg.symbol;
-      snap.invalid_reason = "";
-      if(!m_ready)
-        {
-         snap.invalid_reason = "MarketEngine no inicializado";
+      if(!BeginSnapshot(snap))
          return false;
-        }
-      //--- protección ante cambio de especificación del símbolo
-      int digits = (int)SymbolInfoInteger(m_cfg.symbol, SYMBOL_DIGITS);
-      double point = SymbolInfoDouble(m_cfg.symbol, SYMBOL_POINT);
-      if(digits != m_init_digits || point != m_init_point)
-        {
-         snap.invalid_reason = StringFormat("especificación del símbolo cambió (digits %d->%d, point %g->%g)",
-                                            m_init_digits, digits, m_init_point, point);
-         LogMsg(LOG_CRITICAL, "SYMBOL_SPEC_CHANGED", snap.invalid_reason);
-         return false;
-        }
-      snap.digits = digits;
-      snap.point = point;
-      //--- tiempo y sesión
       snap.server_time = TimeTradeServer();
-      if(!m_clock.OffsetValid())
-        {
-         snap.invalid_reason = "offset horario inválido: " + m_clock.LastError();
+      if(!SetTime(snap))
          return false;
-        }
-      snap.utc_time = m_clock.ServerToUtc(snap.server_time);
-      snap.session = m_clock.SessionAtUtc(snap.utc_time);
       //--- precio actual
       MqlTick tick;
       if(!SymbolInfoTick(m_cfg.symbol, tick) || tick.bid <= 0.0 || tick.ask <= 0.0 || tick.ask < tick.bid)
@@ -630,24 +689,34 @@ public:
          snap.invalid_reason = StringFormat("último tick con %d s de antigüedad", tick_age);
          return false;
         }
-      snap.spread_points = (tick.ask - tick.bid) / point;
-      //--- temporalidades
-      bool ok_h1 = FillTF(0, snap.h1);
-      bool ok_m15 = FillTF(1, snap.m15);
-      bool ok_m5 = FillTF(2, snap.m5);
-      //--- spread de referencia
-      snap.spread_avg_points = CMarketAlgo::AverageRatesSpread(snap.m5.rates, MathMin(m_cfg.spread_avg_bars, snap.m5.bars));
-      if(snap.spread_avg_points <= 0.0 && m_tick_spread_samples >= 100)
-         snap.spread_avg_points = m_tick_spread_ema;
-      snap.spread_ratio = (snap.spread_avg_points > 0.0) ? snap.spread_points / snap.spread_avg_points : 0.0;
-
-      if(!ok_h1 || !ok_m15 || !ok_m5)
+      snap.spread_points = (tick.ask - tick.bid) / snap.point;
+      datetime decision = (datetime)SeriesInfoInteger(m_cfg.symbol, PERIOD_M5, SERIES_LASTBAR_DATE);
+      if(decision <= 0)
         {
-         snap.invalid_reason = (!ok_h1 ? snap.h1.invalid_reason :
-                                (!ok_m15 ? snap.m15.invalid_reason : snap.m5.invalid_reason));
+         snap.invalid_reason = "sin vela M5 actual";
          return false;
         }
-      snap.valid = true;
+      return FillAll(snap, decision, snap.server_time, true);
+     }
+
+   //--- Instantánea histórica tal como se habría visto al abrir la vela M5 de
+   //--- decision_time (solo velas cerradas antes de ese instante). Precio = cierre de
+   //--- la última vela M5 cerrada; spread = MqlRates.spread de esa vela. Para análisis
+   //--- y pruebas: no sustituye al Strategy Tester (no simula ticks ni ejecución).
+   bool              UpdateAt(const datetime decision_time, MarketSnapshot &snap)
+     {
+      if(!BeginSnapshot(snap))
+         return false;
+      snap.server_time = decision_time;
+      if(!SetTime(snap))
+         return false;
+      if(!FillAll(snap, decision_time, decision_time, false))
+         return false;
+      snap.tick_time = decision_time;
+      snap.bid = snap.m5.rates[0].close;
+      snap.spread_points = (double)snap.m5.rates[0].spread;
+      snap.ask = snap.bid + snap.spread_points * snap.point;
+      snap.spread_ratio = (snap.spread_avg_points > 0.0) ? snap.spread_points / snap.spread_avg_points : 0.0;
       return true;
      }
 

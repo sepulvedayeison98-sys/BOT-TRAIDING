@@ -45,32 +45,53 @@ Evaluación en orden; la primera regla que se cumple decide. Todos los umbrales 
 
 Retornos medidos en ATR H1, horizontes 12 y 48 velas M5, **muestreados sin solapamiento**, mínimo 30 observaciones. Con caminatas aleatorias la tasa de falsos "consistentes" medida fue ~2–3 % por régimen (60 semillas). Un umbral calibrado debe confirmarse en un periodo distinto.
 
-## 3. StrategySMC
+## 3. Reglas comunes (implementado en Fase 4: `PatternLib.mqh`, `StrategyBase.mqh`)
 
-| Concepto | Regla objetiva |
+Todas las detecciones usan velas cerradas y pivotes confirmados. Un evento en la vela `i` solo puede usar pivotes con índice `k ≥ i + n + 1` (confirmados antes del evento).
+
+| Patrón | Regla objetiva |
 |---|---|
-| Liquidity Sweep | Vela que supera un pivote confirmado (alto o bajo) por ≥ `x × ATR` y **cierra de vuelta** dentro del rango previo. |
-| BOS | Cierre de vela más allá del último pivote confirmado **en la dirección** de la estructura. |
-| CHoCH | Cierre más allá del último pivote confirmado **contrario** a la estructura vigente. |
-| FVG alcista | En velas `i−2, i−1, i`: `low[i] > high[i−2]` y tamaño ≥ `y × ATR`. Bajista simétrico. Se invalida cuando el precio lo rellena por completo (o al 50 %, configurable). |
-| Order Block alcista | Última vela bajista antes de un desplazamiento que produce un BOS/CHoCH alcista; zona = [low, high] (o cuerpo, configurable). Válido hasta ser mitigado. |
-| Premium / Discount | Respecto al último rango de impulso M15 (pivote bajo → pivote alto): > 50 % premium, < 50 % discount. Compras solo en discount, ventas solo en premium. |
-| Zonas de liquidez | Pivotes iguales (dobles techos/suelos dentro de `z × ATR`) y extremos de sesión previa (Asia/Londres). |
-| Rechazo estructural | Mecha ≥ 60 % del rango de la vela dentro de una zona OB/FVG, con cierre fuera de ella. |
+| Barrido (sweep) | La vela supera un pivote confirmado **aún intacto** por ≥ 0.05 ATR y **cierra de vuelta** del lado previo. |
+| BOS / CHoCH / BREAK | Cierre más allá del pivote confirmado más reciente, con la vela anterior sin haberlo cerrado (ruptura fresca). BOS si va a favor de la estructura del TF, CHoCH si va en contra, BREAK si la estructura era mixta o desconocida. |
+| FVG | Velas (i, i+1, i+2): alcista si `low[i] > high[i+2]`, tamaño ≥ 0.1 ATR. Se descarta si una vela posterior lo **rellena por completo**. |
+| Order Block | Última vela contraria antes del desplazamiento que produjo la ruptura. Se descarta si una vela posterior **cierra** más allá de su extremo. |
+| Vela de rechazo | Mecha del lado del rechazo ≥ 60 % del rango y cierre en la mitad favorable. |
+| Caja de consolidación | `box_bars` velas con altura ≤ `max_box_atr` ATR. |
+| Divergencia RSI | Dos pivotes más recientes del lado indicado: precio más extremo y RSI menos extremo en ≥ 3 puntos; pivote nuevo con ≤ 12 velas de antigüedad. |
+| Rango asiático | Máximo/mínimo de 00:00–07:00 UTC de la sesión más reciente (puede estar en curso). |
 
-**Setup (ejemplo compra):** H1 alcista o rango en discount → sweep de liquidez bajo M15 → CHoCH/BOS alcista M15 → retroceso a FVG/OB en discount → confirmación M5 (BOS M5 o rechazo). SL bajo el mínimo del sweep + colchón ATR. TP en la siguiente liquidez opuesta.
+**Confirmación M5:** vela de rechazo en la última vela M5 cerrada, o ruptura de estructura M5 en las últimas 2 velas.
+**Entrada de referencia:** cierre de esa vela M5. La señal expira al cerrar la vela M5 siguiente.
+**SL:** invalidación estructural + 0.2 ATR M15; si queda a menos de 0.5 ATR se aleja hasta 0.5 ATR; si queda a más de 4 ATR la señal se descarta.
+**TP:** nivel de liquidez opuesto más cercano entre pivotes M15/H1 y los niveles propios de cada estrategia, a ≥ 1 ATR M15 y ≤ 8 ATR H1. Si no hay ninguno, no hay señal. **El R:R mínimo (1:2) lo exige el RiskManager**; las estrategias solo lo calculan.
+**Régimen:** ninguna estrategia opera en `NO_TRADE` ni en `HIGH_VOLATILITY`. La compatibilidad de régimen se decide dentro de cada estrategia (un solo lugar).
 
-## 4. StrategyBreakout
+## 4. StrategySMC (compra; venta = espejo)
+1. Régimen `TREND_UP` o `RANGE`.
+2. Barrido de un mínimo M15 en las últimas 16 velas.
+3. Ruptura alcista M15 por cierre **después** del barrido.
+4. Zona de interés en el desplazamiento: FVG sin rellenar (preferente) u Order Block sin invalidar.
+5. Descuento: el centro de la zona está por debajo del 50 % del tramo (mecha del barrido → máximo posterior).
+6. La última vela M5 toca la zona sin cerrar por debajo, con confirmación M5.
+- Invalidación: lo más bajo entre la mecha del barrido y el borde inferior de la zona.
+- Niveles extra para el TP: máximo del tramo y máximo asiático.
 
-- **Consolidación M15**: ≥ `B` velas con rango total ≤ `c × ATR(M15)` y ADX descendente.
-- **Ruptura válida**: cierre fuera del rango ≥ `d × ATR`, cuerpo ≥ 60 % de la vela, spread ≤ umbral; tick volume de la vela ≥ `v ×` media (proxy, ver limitaciones).
-- **Entrada**: retest del borde roto con rechazo en M5, o continuación tras BOS M5 si no hay retest en `T` velas (configurable).
-- **Falsa ruptura**: si vuelve a cerrar dentro del rango antes de la entrada → señal cancelada (y puede alimentar a SMC/Reversal como sweep).
+## 5. StrategyBreakout (compra; venta = espejo)
+1. Régimen `TREND_UP` o `RANGE`.
+2. Caja M15 de 12 velas con altura ≤ 3 ATR; vela de ruptura que cierra ≥ 0.1 ATR fuera, con cuerpo ≥ 60 %, en las últimas 8 velas M15, sin cierres posteriores de vuelta dentro (falsa ruptura = descarte).
+3. Volumen: tick volume ≥ 1.2 × la media de la caja. Se registra como evidencia; es obligatorio solo con `require_volume` (el tick volume es un indicador indirecto).
+4. Entrada: **retest** (vela M5 alcista que toca el borde ± 0.2 ATR y cierra fuera) o **continuación** (ruptura M5 si pasaron ≥ 3 velas M15 sin retest).
+- Invalidación: mitad de la caja. Nivel extra para el TP: proyección de la altura de la caja.
 
-## 5. StrategyReversal
+## 5b. StrategyReversal (compra contra tendencia bajista; venta = espejo)
+- Régimen `TREND_DOWN` o `RANGE`.
+- **Obligatorio:** CHoCH alcista M15 en las últimas 16 velas, y el cierre M5 sigue por encima del nivel roto.
+- ≥ 3 confirmaciones entre: CHoCH, divergencia RSI M15, barrido de un mínimo M15 (anterior o igual al CHoCH), vela de rechazo M15 en el extremo del tramo, extremo a ≥ 2 ATR por debajo de la EMA50 M15.
+- Confirmación M5 obligatoria. Sobrecompra/sobreventa sola nunca genera señal.
+- Invalidación: extremo del tramo. Nivel extra para el TP: origen del tramo.
 
-Requiere **al menos 3** de: divergencia RSI (pivotes confirmados de precio vs RSI), sweep de liquidez, vela de rechazo en zona relevante, CHoCH en M15/M5, extensión ≥ `e × ATR` desde EMA50.
-**Obligatorio**: CHoCH de confirmación. Sobrecompra/sobreventa sola nunca genera señal.
+### Observaciones de la reproducción sintética (no son métricas de rendimiento)
+En 1.500 velas M5 por serie, las estrategias generaron entre 0 y ~25 señales por serie. La frecuencia y los umbrales deben medirse con datos reales en el Strategy Tester.
 
 ## 6. AdaptiveEngine — puntuación
 
