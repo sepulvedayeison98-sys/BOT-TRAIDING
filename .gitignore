@@ -1,0 +1,14 @@
+# Datos generados por el EA / herramientas (se conservan las carpetas)
+XAUUSD_AUTONOMOUS/Files/*/*
+!XAUUSD_AUTONOMOUS/Files/*/.gitkeep
+# Binarios MQL5 compilados
+*.ex5
+*.ex4
+# Configuraciones con posibles secretos
+*.set
+*.ini
+.env
+# Python
+__pycache__/
+*.pyc
+.venv/
