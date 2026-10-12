@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0] - 2026-10-12 — Fase 7: ejecución y posiciones
+### Añadido
+- `TradeGateway.mqh` (interfaz + `CTerminalGateway` real), `ExecutionManager.mqh`, `PositionManager.mqh`.
+- Tipos `ExecutionResult`, `PositionInfo`, `PositionMeta`, `PendingRequest`, `ClosedTrade`.
+- `Tests/Validation/FakeGateway.mqh` y `Test_Phase7.mq5` (74/74).
+
 ## [0.6.0] - 2026-10-12 — Fase 6: gestión de riesgo
 ### Añadido
 - `RiskManager.mqh`: volumen con OrderCalcProfit + verificación cruzada + costos, margen con OrderCalcMargin, exposición agregada, pérdida diaria con peor caso, límites duros, reducción opcional tras pérdidas, protección de cuenta real, `SymbolSpecLoad`/`SymbolSpecChanged`.

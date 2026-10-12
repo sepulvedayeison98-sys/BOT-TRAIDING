@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.6.0"
+#define XAU_PROJECT_VERSION "0.7.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -325,7 +325,101 @@ struct RiskDecision
    string            detail;
   };
 
+//--- Resultado de un intento de ejecución
+enum ENUM_EXEC_STATUS
+  {
+   EXEC_DONE = 0,       // aceptada por el servidor
+   EXEC_REJECTED,       // rechazada (no hay operación)
+   EXEC_UNCERTAIN,      // estado desconocido: NO reintentar, reconciliar con el servidor
+   EXEC_SKIPPED         // no enviada (validación previa)
+  };
+
+struct ExecutionResult
+  {
+   ENUM_EXEC_STATUS  status;
+   uint              retcode;
+   string            message;
+   ulong             order;
+   ulong             deal;
+   double            requested_price;
+   double            fill_price;
+   double            slippage_points;   // positivo = en contra
+   int               attempts;
+   string            comment;           // comentario enviado (para reconciliar)
+  };
+
+//--- Posición tal como la reporta el servidor
+struct PositionInfo
+  {
+   ulong             ticket;
+   long              identifier;
+   ENUM_DIRECTION    direction;
+   double            volume;
+   double            open_price;
+   double            sl;
+   double            tp;
+   double            profit;
+   datetime          open_time;
+   string            comment;
+   long              magic;
+  };
+
+//--- Metadatos propios de una posición (persistidos en StateStore)
+struct PositionMeta
+  {
+   long              identifier;
+   string            signal_id;
+   string            setup_key;
+   ENUM_STRATEGY_ID  strategy;
+   double            initial_sl;
+   double            invalidation;
+   bool              be_done;
+   bool              orphan;            // posición encontrada sin metadatos
+  };
+
+//--- Solicitud enviada cuyo resultado aún no se confirmó
+struct PendingRequest
+  {
+   bool              active;
+   string            signal_id;
+   string            setup_key;
+   string            comment;
+   ENUM_DIRECTION    direction;
+   double            volume;
+   datetime          sent_at;
+   ENUM_STRATEGY_ID  strategy;
+   double            initial_sl;
+   double            invalidation;
+  };
+
+//--- Operación cerrada (agregada por identificador de posición) para estadísticas
+struct ClosedTrade
+  {
+   long              identifier;
+   ENUM_DIRECTION    direction;
+   double            volume;
+   double            entry_price;
+   double            exit_price;
+   datetime          open_time;
+   datetime          close_time;
+   double            profit;            // sin comisión ni swap
+   double            commission;
+   double            swap;
+   string            comment;
+  };
+
 //--- Utilidades de texto
+string EnumExecStatusToString(const ENUM_EXEC_STATUS s)
+  {
+   switch(s)
+     {
+      case EXEC_DONE:      return "DONE";
+      case EXEC_REJECTED:  return "REJECTED";
+      case EXEC_UNCERTAIN: return "UNCERTAIN";
+      default:             return "SKIPPED";
+     }
+  }
+
 string EnumQualityToString(const ENUM_SIGNAL_QUALITY q)
   {
    switch(q)

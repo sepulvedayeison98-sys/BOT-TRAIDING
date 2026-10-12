@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 6 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
+> Estado: **Fase 7 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -106,3 +106,8 @@ Medida de la debilidad del ADX: en la oscilación lateral sintética, la regla c
 `Test_Phase6.mq5` → **90 passed, 0 failed**: volumen (0.20 para 1 % con SL de 5 USD; 0.19 con comisión; 0.18 en venta con spread; base = min(balance, equity)), lote mínimo nunca redondeado hacia arriba, volumen máximo, R:R, stops level, verificación cruzada (crítica), fallo de OrderCalcProfit, margen libre y nivel de margen, reducción tras rachas (solo reduce), exposición agregada (1 %+1 % sí, 2 %+1 % no, break-even no cuenta, SL en beneficio = 0), máximo de posiciones, posición sin SL (crítico), Netting, pérdida diaria (peor caso, bloqueo enganchado, reset, depósitos/retiros, reset a las 22:00, restauración solo del mismo día, reconstrucción), límites duros, protección de cuenta real, cambio de especificación, StateStore (ida y vuelta, saneado, prefijos, corrupción, truncado).
 
 La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu terminal (el EA la hace en cada evaluación y `SymbolSpecDump` la reporta).
+
+### Fase 7 — 2026-10-12
+`Test_Phase7.mq5` (servidor simulado `FakeGateway.mqh`) → **74 passed, 0 failed**:
+- Ejecución: OrderCheck antes de OrderSend; solicitud correcta (tipo, volumen, SL, TP, magic, comentario, filling); slippage; anti-duplicado con pendiente; recotización → reintento; recotizaciones agotadas (exactamente 3 envíos); **timeout con operación abierta → sin reintento + reconciliación la encuentra**; sin conexión → bloqueo hasta timeout, orden en proceso mantiene el bloqueo; comentario alterado por el bróker; sin dinero; OrderCheck rechaza; spread; desvío de precio; mercado cerrado; trading no permitido; volumen fuera de paso; decisión no aprobada; filling IOC.
+- Posiciones: break-even a 1R (entrada + 10 puntos + spread), trailing ATR a 1.6R, el SL nunca se aleja, sin datos válidos no hay trailing, venta en espejo, stops level, freeze level, posición sin SL → SL protector + crítico + huérfana, cierre por invalidación, 3 fallos al modificar → crítico, trailing por pivote M5, persistencia de metadatos, solo posiciones con su magic, cierre total sin tocar otros EA, racha de pérdidas (comisión incluida).

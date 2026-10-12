@@ -52,6 +52,7 @@ XAUUSD_AUTONOMOUS/
 │   ├── StrategyReversal.mqh
 │   ├── AdaptiveEngine.mqh
 │   ├── RiskManager.mqh
+│   ├── TradeGateway.mqh     (*) única puerta al servidor (real o simulada en pruebas) (Fase 7)
 │   ├── ExecutionManager.mqh
 │   ├── NewsManager.mqh
 │   ├── PositionManager.mqh
@@ -316,6 +317,12 @@ struct PositionRecord {               // reconstruible desde servidor + StateSto
 - Reintentos solo para retcodes explícitamente no ejecutados (p. ej. requote/precio cambiado), máximo N (input, por defecto 2), recalculando precio y re-validando riesgo/spread.
 
 ---
+
+### 7.1 Implementación (Fase 7)
+- `TradeGateway.mqh`: interfaz con `CTerminalGateway` (OrderCheck/OrderSend, posiciones, órdenes, historial) — ExecutionManager y PositionManager no llaman a la API de trading directamente, lo que permite probarlos con un servidor simulado.
+- Clasificación de retcodes: DONE/DONE_PARTIAL/PLACED = éxito; REQUOTE/PRICE_CHANGED/PRICE_OFF = reintentable (máx. 2); TIMEOUT/CONNECTION/ERROR/sin código = **incierto (no se reintenta)**; el resto = rechazo.
+- La solicitud se registra como pendiente **antes** de `OrderSend`; mientras esté pendiente no se envía otra. Reconciliación: posición con el comentario → posición con misma dirección/volumen abierta tras el envío (si el bróker cambió el comentario) → deal de entrada en el historial → orden aún en proceso → sin rastro tras 90 s = no ejecutada.
+- Comentario de orden: `XA|<hash de 8 hex>` (corto para tolerar truncado).
 
 ## 8. Seguridad operativa
 
