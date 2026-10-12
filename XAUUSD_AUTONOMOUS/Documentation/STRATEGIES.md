@@ -93,24 +93,23 @@ Todas las detecciones usan velas cerradas y pivotes confirmados. Un evento en la
 ### Observaciones de la reproducción sintética (no son métricas de rendimiento)
 En 1.500 velas M5 por serie, las estrategias generaron entre 0 y ~25 señales por serie. La frecuencia y los umbrales deben medirse con datos reales en el Strategy Tester.
 
-## 6. AdaptiveEngine — puntuación
+## 6. AdaptiveEngine (implementado en Fase 5)
 
-| Componente | Puntos | Trend-following (SMC/Breakout) | Reversal |
+### Puntuación (0-100). NO es una probabilidad.
+| Componente | Máx. | SMC / Breakout | Reversal |
 |---|---|---|---|
-| Contexto H1 | 20 | alineación con tendencia H1 | agotamiento H1 (extensión, divergencia H1, zona mayor) |
-| Estructura M15 | 20 | BOS/CHoCH a favor | CHoCH contra el movimiento previo |
-| Liquidez | 20 | sweep previo + zona en discount/premium correcto | sweep del extremo |
-| Confirmación M5 | 20 | BOS/rechazo M5 | BOS/rechazo M5 |
-| Momentum y volatilidad | 10 | momentum a favor, ATR_ratio normal | pérdida de momentum |
-| Calidad de ejecución | 10 | spread bajo, R:R ≥ 2.5, lejos de noticias y fin de sesión | igual |
+| Contexto H1 | 20 | régimen alineado 20; `RANGE` 10; en contra 0 | régimen opuesto o `RANGE` 10 + RSI H1 extremo (≤35 / ≥65) 5 + precio a ≤ 1 ATR H1 de un pivote H1 opuesto 5 |
+| Estructura M15 | 20 | BOS/CHoCH 20; BREAK 12; caja + ruptura (Breakout) 20 | CHoCH 20 |
+| Liquidez | 20 | SMC: barrido 12 + nivel asiático 4 + descuento/premium 4. Breakout: retest 10 + expansión de volumen 10 | barrido 12 + nivel asiático 4 + divergencia RSI 4 |
+| Confirmación M5 | 20 | rechazo 10 + ruptura M5 10 | igual |
+| Momentum y volatilidad | 10 | pendiente EMA M5 a favor 5 + ATR H1 entre 0.7 y 1.5 de su media 5 | cambio de momentum M5/M15 5 + volatilidad normal 5 |
+| Calidad de ejecución | 10 | spread ≤ 1.2× media 4 (≤ 2× 2) + R:R ≥ 2.5 3 (≥ 2 2) + sin noticias y ≥ 30 min al cierre de sesión 3 | igual |
 
-El componente H1 se define **por familia de estrategia** (riesgo R5 en ARCHITECTURE.md): con la definición literal "tendencia H1", Reversal quedaría sistemáticamente descartada.
+Umbrales: < 65 descartar · 65–79 moderada · ≥ 80 alta. Ambas calidades usan el **mismo riesgo** (1 %).
 
-**Umbrales iniciales:** < 65 descartar · 65–79 moderada · ≥ 80 alta. **No son probabilidades.** Inicialmente "moderada" y "alta" usan el **mismo riesgo (1 %)**; diferenciar riesgo por calidad requeriría evidencia estadística y tu aprobación.
-
-**Resolución:**
-1. Señales de direcciones opuestas en la misma vela → descartar ambas (`CONFLICT`).
-2. Misma dirección, zonas solapadas → una sola oportunidad; gana la de mayor puntuación (`DEDUP`).
-3. Ya existe posición propia sobre la misma zona/`invalidation` → descartar.
-4. Régimen incompatible con la estrategia (p. ej. Breakout en `RANGE` sin consolidación) → descartar.
-5. Envío a RiskManager de **una** propuesta como máximo por vela M5.
+### Coordinación (por vela M5)
+1. Descarta señales que violan invariantes, expiradas, de setups ya consumidos (24 h) o sobre las que ya hay posición (mismo setup o misma zona ±0.5 ATR M15 en la misma dirección).
+2. Compra y venta a la vez → **conflicto**: se descartan todas.
+3. Puntúa las restantes y elige la mayor. Las zonas solapadas se registran como la misma oportunidad.
+4. Si la mejor no llega al umbral → descarte con motivo. Si llega → **una** propuesta al RiskManager.
+5. Un modelo Champion aprobado solo puede cambiar los umbrales (50–95), nunca el riesgo.

@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 4 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
+> Estado: **Fase 5 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -98,3 +98,6 @@ Medida de la debilidad del ADX: en la oscilación lateral sintética, la regla c
 **Hallazgos de la fase:**
 - `CustomTicksAdd` reescribe como vela plana (O=H=L=C) la vela que contiene el tick. Afectaba a la copia "sin futuro" del test; se añadió `add_tick=false` al helper. No afecta a datos del bróker.
 - MarketEngine copia por posición (`iBarShift` + `CopyRates`/`CopyBuffer` con el mismo índice) y verifica que la vela esté cerrada en el instante de decisión.
+
+### Fase 5 — 2026-10-12
+`Test_Phase5.mq5`: puntuación por componente con valores calculados a mano (SMC 78 → moderada; con BOS y ruptura M5 96 → alta; reversión por agotamiento; breakout), noticias/fin de sesión/spread, selección de la mejor, duplicados, conflicto compra/venta, setup consumido y su caducidad, posición existente (misma zona / mismo setup / lejana), expiración, umbral, señal inválida, configuración → **44 passed, 0 failed**. Regresión Fase 4: 100/100.

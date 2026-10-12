@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.4.0"
+#define XAU_PROJECT_VERSION "0.5.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -219,7 +219,64 @@ struct TradeSignal
    SignalEvidence    evidence;
   };
 
+//--- Calidad de una propuesta según la puntuación (NO es una probabilidad)
+enum ENUM_SIGNAL_QUALITY
+  {
+   QUALITY_DISCARD = 0,   // < umbral mínimo
+   QUALITY_MODERATE,      // [umbral mínimo, umbral alto)
+   QUALITY_HIGH           // >= umbral alto
+  };
+
+//--- Componentes de la puntuación (máximos: 20, 20, 20, 20, 10, 10)
+struct ScoreBreakdown
+  {
+   double            h1_context;
+   double            m15_structure;
+   double            liquidity;
+   double            m5_confirmation;
+   double            momentum_volatility;
+   double            execution;
+   double            total;
+  };
+
+//--- Resumen de una posición propia abierta (lo aporta PositionManager)
+struct PositionBrief
+  {
+   ulong             ticket;
+   ENUM_DIRECTION    direction;
+   double            open_price;
+   string            setup_key;
+  };
+
+//--- Contexto externo que el coordinador no calcula por sí mismo
+struct AdaptiveContext
+  {
+   bool              news_clear;              // sin ventana de noticias próxima (NewsManager)
+   int               minutes_to_session_end;  // minutos hasta el cierre de la sesión activa (-1 = desconocido)
+  };
+
+//--- Propuesta enviada al RiskManager
+struct TradeProposal
+  {
+   bool              valid;
+   TradeSignal       signal;
+   ScoreBreakdown    score;
+   ENUM_SIGNAL_QUALITY quality;
+   int               candidates;     // señales recibidas
+   string            decision;       // explicación de la selección o del descarte
+  };
+
 //--- Utilidades de texto
+string EnumQualityToString(const ENUM_SIGNAL_QUALITY q)
+  {
+   switch(q)
+     {
+      case QUALITY_HIGH:     return "HIGH";
+      case QUALITY_MODERATE: return "MODERATE";
+      default:               return "DISCARD";
+     }
+  }
+
 string EnumStrategyToString(const ENUM_STRATEGY_ID s)
   {
    switch(s)

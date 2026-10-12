@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2026-10-12 — Fase 5: coordinador adaptativo
+### Añadido
+- `AdaptiveEngine.mqh`: puntuación de 6 componentes (contexto H1 específico para reversión), umbrales 65/80, conflictos, deduplicación, setups consumidos, posiciones existentes, propuesta única con explicación.
+- Tipos `ScoreBreakdown`, `TradeProposal`, `PositionBrief`, `AdaptiveContext`.
+- `Tests/Validation/TestSnapshots.mqh` (constructores compartidos) y `Test_Phase5.mq5` (44/44).
+
 ## [0.4.0] - 2026-10-12 — Fase 4: estrategias
 ### Añadido
 - `PatternLib.mqh` (barrido, BOS/CHoCH, FVG, Order Block, caja de consolidación, divergencia RSI, rechazo, rango asiático) y `StrategyBase.mqh` (SL/TP, confirmación M5, invariantes, IDs).
