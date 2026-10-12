@@ -10,17 +10,40 @@
 - **Volatilidad relativa** (implementado): `atr_ratio = ATR(14)[0] / media(ATR(14)[0..99])`.
 - **Spread medio** (implementado): media de `MqlRates.spread` de las últimas 50 velas M5 cerradas (si al menos la mitad lo trae); si el bróker no lo provee, EMA del spread muestreado por tick (requiere ≥ 100 muestras). Si no hay referencia, `spread_avg_points = 0` y los filtros relativos deben tratarlo como "sin referencia".
 
-## 2. RegimeEngine (H1 principal, M15 de apoyo)
+## 2. RegimeEngine (implementado en Fase 3)
 
-| Régimen | Condición inicial (todas configurables) |
-|---|---|
-| `HIGH_VOLATILITY` | `ATR_ratio ≥ 1.8` (se evalúa primero) |
-| `TREND_UP` | EMA50 > EMA200, precio > EMA50, ADX ≥ 22, estructura H1 alcista |
-| `TREND_DOWN` | simétrico |
-| `RANGE` | ADX < 18 y precio oscilando entre extremos confirmados de M15 |
-| `NO_TRADE` | datos inválidos, ADX entre 18–22 sin estructura clara, spread anómalo, o condiciones contradictorias |
+Evaluación en orden; la primera regla que se cumple decide. Todos los umbrales son inputs y son **hipótesis iniciales sin validar**.
 
-`HIGH_VOLATILITY` por defecto **no opera** (configurable a "solo con riesgo reducido" — nunca aumentado).
+| # | Condición | Régimen |
+|---|---|---|
+| 1 | Snapshot o cualquier TF inválido | `NO_TRADE` |
+| 2 | `spread_ratio > 3.0` (si hay referencia de spread) | `NO_TRADE` |
+| 3 | `atr_ratio H1 ≥ 1.8` o `atr_ratio M15 ≥ 2.2` | `HIGH_VOLATILITY` |
+| 4 | `atr_ratio H1 < 0.5` | `NO_TRADE` (mercado muerto) |
+| 5 | `ADX H1 ≥ 22` y **todas**: EMA50 vs EMA200, cierre H1 del lado de la EMA50, +DI/−DI a favor, pendiente EMA50 ≥ 0.05 ATR a favor, estructura H1 HH/HL (o LH/LL) | `TREND_UP` / `TREND_DOWN` |
+| 5b | `ADX H1 ≥ 22` sin alineación completa | `NO_TRADE` (el motivo lista cada condición fallida) |
+| 6 | `ADX H1 ≤ 18`, `|pendiente| ≤ 0.3`, rango = último pivote alto y bajo M15 confirmados, ancho entre 2 y 12 ATR M15, cierre M5 dentro | `RANGE` |
+| 7 | ADX entre 18 y 22 | `NO_TRADE` (zona neutral) |
+
+**Histéresis:** el estado inicial es `NO_TRADE`. Pasar a `NO_TRADE` o `HIGH_VOLATILITY` es inmediato (seguridad). Cualquier otro cambio exige 2 evaluaciones consecutivas (configurable).
+
+**Información adicional para el AdaptiveEngine:** distancia en ATR H1 al pivote alto H1 más reciente por encima del precio y al pivote bajo por debajo (`-1` si no hay), y límites del rango M15.
+
+`HIGH_VOLATILITY` por defecto **no opera** (configurable en fases posteriores a "solo con riesgo reducido", nunca aumentado).
+
+**Hallazgo en pruebas:** en una oscilación lateral sintética el ADX H1 marcó 25.9, por encima del umbral de tendencia. Las reglas de alineación la bloquearon (`NO_TRADE`), pero confirma que **el ADX por sí solo no distingue oscilación de tendencia**; los umbrales deben calibrarse con `Tools/regime_report.py` sobre datos reales.
+
+### Validación estadística del régimen
+`Tests/Backtesting/RegimeLogger.mq5` registra régimen y variables en cada vela M5 cerrada; `Tools/regime_report.py` comprueba si cada régimen se comporta como promete:
+
+| Régimen | Hipótesis comprobada | Criterio "CONSISTENTE" |
+|---|---|---|
+| `TREND_UP` | retorno futuro medio > 0 | t ≥ 2 |
+| `TREND_DOWN` | retorno futuro medio < 0 | t ≤ −2 |
+| `HIGH_VOLATILITY` | movimiento absoluto mayor | ≥ 1.3 × media global |
+| `RANGE` | desde los extremos el precio vuelve al centro | retorno firmado medio > 0, t ≥ 2 |
+
+Retornos medidos en ATR H1, horizontes 12 y 48 velas M5, **muestreados sin solapamiento**, mínimo 30 observaciones. Con caminatas aleatorias la tasa de falsos "consistentes" medida fue ~2–3 % por régimen (60 semillas). Un umbral calibrado debe confirmarse en un periodo distinto.
 
 ## 3. StrategySMC
 

@@ -1,6 +1,6 @@
 # Instalación
 
-> Estado: **Fase 2**. Todavía no existe el EA operativo (`XAUUSD_Autonomous.mq5` llega en la Fase 11).
+> Estado: **Fase 3**. Todavía no existe el EA operativo (`XAUUSD_Autonomous.mq5` llega en la Fase 11).
 > Lo que se puede instalar hoy: herramientas de diagnóstico de solo lectura y pruebas.
 
 ## 1. Requisitos (uso real)
@@ -22,6 +22,13 @@
 2. **Datos reales**: carga `MarketEngineMonitor` en un gráfico XAUUSD (cualquier TF) durante al menos una sesión de Londres o NY, o ejecútalo en el Strategy Tester. Envíame `MQL5/Files/XAUUSD/logs/MarketEngineMonitor_<fecha>.log`.
    - En el Strategy Tester, configura `InpTesterGmtOffsetMin` e `InpTesterDstRule` con el offset del servidor de Deriv (lo indica `server_gmt_offset_sec_raw` del paso 1).
 
+### Fase 3: validación del régimen con datos reales
+1. Copia `Tests/Backtesting/RegimeLogger.mq5` a `MQL5/Experts/XAUUSD/` y compílalo.
+2. Strategy Tester: experto `RegimeLogger`, símbolo XAUUSD (Deriv), periodo M5, modelo "OHLC en M1" (suficiente: solo registra), al menos 12 meses. Configura `InpTesterGmtOffsetMin`/`InpTesterDstRule` según el paso anterior.
+3. El CSV queda en la carpeta común: *Archivo → Abrir carpeta de datos*, subir dos niveles → `Common/Files/XAUUSD/regime_XAUUSD_*.csv`.
+4. Ejecuta `python3 Tools/regime_report.py regime_XAUUSD_*.csv --out reporte_regimen.md` (Python 3.8+, sin dependencias) o envíame el CSV.
+5. Para comprobar fuera de muestra, repite con otro periodo distinto y **sin cambiar parámetros**.
+
 ## 4. Compilar y probar en Linux (desarrollo)
 ```bash
 XAUUSD_AUTONOMOUS/Tools/setup_wine_mt5.sh          # una vez: Wine + Xvfb + MT5
@@ -29,6 +36,8 @@ XAUUSD_AUTONOMOUS/Tools/compile.sh <archivo.mq5>   # compila con MetaEditor
 XAUUSD_AUTONOMOUS/Tools/run_tests.sh XAUUSD_AUTONOMOUS/Tests/Validation/Test_Phase2.mq5 \
                                      XAUUSD_AUTONOMOUS/Tests/Validation/Test_MarketEngine_Custom.mq5
 ```
+Pruebas de Python: `python3 -m unittest discover -s XAUUSD_AUTONOMOUS/Tools/tests -v`.
+
 El terminal bajo Wine **no se conecta a ninguna cuenta**: solo compila y ejecuta pruebas con datos sintéticos. MT5 advierte que Wine 9.0 no está soportado oficialmente; la compilación y las pruebas funcionaron, pero el resultado definitivo es el de tu MetaEditor en Windows.
 
 ## 5. Seguridad

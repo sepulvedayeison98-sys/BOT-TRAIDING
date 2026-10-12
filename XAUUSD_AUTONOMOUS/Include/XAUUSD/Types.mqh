@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.2.0"
+#define XAU_PROJECT_VERSION "0.3.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -142,7 +142,39 @@ struct MarketSnapshot
    TFData            m5;
   };
 
+//--- Resultado del RegimeEngine
+struct RegimeState
+  {
+   ENUM_REGIME       regime;             // régimen estable (tras histéresis)
+   ENUM_REGIME       raw_regime;         // clasificación instantánea de esta evaluación
+   string            reason;             // motivo de la clasificación instantánea
+   datetime          evaluated_at;       // hora del servidor
+   int               evaluations_in_regime;
+   double            h1_adx;
+   double            h1_atr_ratio;
+   double            m15_atr_ratio;
+   double            h1_ema_slope;
+   ENUM_MARKET_STRUCTURE h1_structure;
+   ENUM_MARKET_STRUCTURE m15_structure;
+   double            range_high;         // límites del rango M15 (0 si no aplica)
+   double            range_low;
+   double            dist_swing_high_atr; // distancia al pivote alto H1 por encima del precio, en ATR H1 (-1 = no hay)
+   double            dist_swing_low_atr;  // distancia al pivote bajo H1 por debajo del precio, en ATR H1 (-1 = no hay)
+  };
+
 //--- Utilidades de texto
+string EnumRegimeToString(const ENUM_REGIME r)
+  {
+   switch(r)
+     {
+      case REGIME_TREND_UP:        return "TREND_UP";
+      case REGIME_TREND_DOWN:      return "TREND_DOWN";
+      case REGIME_RANGE:           return "RANGE";
+      case REGIME_HIGH_VOLATILITY: return "HIGH_VOLATILITY";
+      default:                     return "NO_TRADE";
+     }
+  }
+
 string EnumSessionToString(const ENUM_SESSION_ID s)
   {
    switch(s)

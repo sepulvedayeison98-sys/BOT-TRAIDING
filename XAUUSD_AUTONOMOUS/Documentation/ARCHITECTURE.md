@@ -395,7 +395,8 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 10. **Sin hilos**: todo corre en un único hilo de eventos; cálculos pesados (SMC sobre muchas velas) deben ser incrementales para no bloquear `OnTick`.
 11. **ONNX**: MQL5 soporta modelos ONNX (según mi conocimiento, desde builds de 2023 — verificar). Posible vía futura para un modelo del Challenger, siempre como filtro de estrategia, nunca de riesgo.
 12. **`TimeCurrent()` no es "ahora"**: devuelve la hora del último tick conocido (en fin de semana o sin conexión puede ser de días antes; en la Fase 2 se observó 2024-08-23 con el terminal desconectado). Para la hora actual del servidor se usa `TimeTradeServer()`.
-13. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
+13. **El Strategy Tester exige una cuenta**: aunque el símbolo sea personalizado, el tester no arranca si el terminal no tiene una cuenta configurada (observado en Fase 3). Las pruebas en tester se ejecutan en tu terminal.
+14. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
 
 ---
 

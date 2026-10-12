@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 2 completada**. Resultados registrados en §7.
+> Estado: **Fase 3 completada**. Resultados registrados en §7.
 
 ## 1. Niveles de prueba
 
@@ -68,3 +68,19 @@ Beneficio neto, profit factor, DD máximo (monetario y %), expectativa por opera
 **Prueba de mutación:** se cambió a propósito la comparación estricta de pivotes (`>=` → `>`); la batería lo detectó (99/100, falla "máximos iguales no generan pivote"). Se restauró el código.
 
 **No cubierto todavía (requiere datos reales de Deriv):** historial no sincronizado, huecos reales de datos, comportamiento en la pausa diaria del oro y fines de semana, offset horario real del servidor, spread real.
+
+### Fase 3 — 2026-10-12 (MetaEditor/MT5 build 6257 bajo Wine 9.0; Python 3.13)
+
+| Archivo | Compilación | Ejecución |
+|---|---|---|
+| `Tests/Validation/Test_Phase3.mq5` (clasificación por regla y por condición rota, límites exactos de ADX, volatilidad, spread, datos inválidos, rango, histéresis, configuración) | 0 errores, 0 warnings | **56 passed, 0 failed** |
+| `Tests/Validation/Test_RegimeEngine_Custom.mq5` (MarketEngine → RegimeEngine con indicadores reales de MT5: series alcista, bajista, lateral y choque de volatilidad) | 0 errores, 0 warnings | **19 passed, 0 failed** |
+| `Tools/tests/test_regime_report.py` (detección de comportamiento conocido, caminata aleatoria no confirmada, muestra pequeña, huecos de datos, persistencia, CLI, formato del CSV igual al de RegimeLogger) | — | **7 tests OK** |
+| `Tests/Backtesting/RegimeLogger.mq5`, `CreateSyntheticXAU.mq5` | 0 errores, 0 warnings | Tester no ejecutable aquí (ver abajo) |
+| Regresión Fase 2 | 0 errores, 0 warnings | 100/100 y 26/26 |
+
+`Test_MarketEngine_Custom` pasa de 29 a 26 aserciones: la creación del símbolo se movió a `SyntheticSymbol.mqh` (4 aserciones pasaron a ser 1).
+
+**Defecto metodológico encontrado y corregido:** la primera versión del reporte correlacionaba la posición en el rango con retornos solapados. La prueba con caminata aleatoria la marcó como "reversión consistente" (regresión espuria: la posición es muy persistente). Ahora se usan retornos no solapados y retorno firmado desde los extremos; falsos positivos medidos en caminatas aleatorias: TREND_UP 2/60, TREND_DOWN 2/60, RANGE 1/60.
+
+**Limitación:** el Strategy Tester de MT5 no arranca sin una cuenta conectada ("tester not started because the account is not specified"), así que el ensayo `RegimeLogger` en tester solo puedes ejecutarlo tú.

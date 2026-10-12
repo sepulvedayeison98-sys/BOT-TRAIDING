@@ -14,6 +14,7 @@
 #include <XAUUSD/SessionClock.mqh>
 #include <XAUUSD/MarketEngine.mqh>
 #include "TestFramework.mqh"
+#include "SyntheticSymbol.mqh"
 
 input string InpCustomSymbol = "XAUTEST_SYN";
 input int    InpHours        = 900;      // horas de historial sintético
@@ -24,58 +25,6 @@ double SynthPrice(const int i)
    return 2400.0 + 30.0 * MathSin(2.0 * M_PI * t / 4320.0)     // ciclo ~3 días
           + 8.0 * MathSin(2.0 * M_PI * t / 300.0)               // ciclo ~5 h
           + 0.8 * MathSin(t * 1.618033);                        // ruido determinista
-  }
-
-bool CreateSymbol(CTestRunner &t, datetime &last_bar_time, double &last_close)
-  {
-   if(SymbolInfoInteger(InpCustomSymbol, SYMBOL_CUSTOM))
-     {
-      SymbolSelect(InpCustomSymbol, false);
-      CustomSymbolDelete(InpCustomSymbol);
-     }
-   if(!t.True(CustomSymbolCreate(InpCustomSymbol, "XAUUSD_Tests"), "CustomSymbolCreate"))
-      return false;
-   CustomSymbolSetInteger(InpCustomSymbol, SYMBOL_DIGITS, 2);
-   CustomSymbolSetDouble(InpCustomSymbol, SYMBOL_POINT, 0.01);
-   CustomSymbolSetDouble(InpCustomSymbol, SYMBOL_TRADE_TICK_SIZE, 0.01);
-
-   int n = InpHours * 60;
-   datetime now = TimeTradeServer();
-   datetime end = now - (now % 60);           // minuto actual (barra en formación)
-   datetime start = end - (datetime)(n - 1) * 60;
-   MqlRates r[];
-   ArrayResize(r, n);
-   double prev = SynthPrice(0);
-   for(int i = 0; i < n; i++)
-     {
-      double c = SynthPrice(i + 1);
-      r[i].time = start + (datetime)i * 60;
-      r[i].open = NormalizeDouble(prev, 2);
-      r[i].close = NormalizeDouble(c, 2);
-      r[i].high = NormalizeDouble(MathMax(prev, c) + 0.30, 2);
-      r[i].low = NormalizeDouble(MathMin(prev, c) - 0.30, 2);
-      r[i].tick_volume = 50 + (i % 17);
-      r[i].real_volume = 0;
-      r[i].spread = 20;
-      prev = c;
-     }
-   int upd = CustomRatesUpdate(InpCustomSymbol, r);
-   if(!t.EqInt(upd, n, "CustomRatesUpdate cargó todas las velas M1"))
-      return false;
-   t.True(SymbolSelect(InpCustomSymbol, true), "SymbolSelect símbolo sintético");
-   last_bar_time = r[n - 1].time;
-   last_close = r[n - 1].close;
-
-   MqlTick tk[1];
-   ZeroMemory(tk);
-   tk[0].time = last_bar_time + 30;
-   tk[0].time_msc = (long)tk[0].time * 1000;
-   tk[0].bid = last_close;
-   tk[0].ask = NormalizeDouble(last_close + 0.25, 2);
-   tk[0].last = 0;
-   tk[0].flags = TICK_FLAG_BID | TICK_FLAG_ASK;
-   t.True(CustomTicksAdd(InpCustomSymbol, tk) > 0, "CustomTicksAdd tick actual");
-   return true;
   }
 
 //--- EMA independiente (semilla = primer cierre, como MODE_EMA de MT5 según su fórmula estándar)
@@ -98,9 +47,8 @@ double ReferenceEMA(const string sym, const ENUM_TIMEFRAMES tf, const int period
 void OnStart()
   {
    CTestRunner t("Test_MarketEngine_Custom");
-   datetime last_bar_time;
-   double last_close;
-   if(!CreateSymbol(t, last_bar_time, last_close))
+   string err = SyntheticSymbolCreate(InpCustomSymbol, InpHours * 60, SynthPrice, 0.25, 20);
+   if(!t.True(err == "", "símbolo sintético creado: " + err))
      {
       t.Finish();
       return;
@@ -183,7 +131,6 @@ void OnStart()
    t.True(!me.Update(s), "Update tras Deinit devuelve inválido");
    log.Close();
 
-   SymbolSelect(InpCustomSymbol, false);
-   CustomSymbolDelete(InpCustomSymbol);
+   SyntheticSymbolDelete(InpCustomSymbol);
    t.Finish();
   }

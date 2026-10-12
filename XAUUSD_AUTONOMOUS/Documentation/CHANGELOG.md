@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0] - 2026-10-12 — Fase 3: régimen de mercado
+### Añadido
+- `Include/XAUUSD/RegimeEngine.mqh`: clasificación TREND_UP / TREND_DOWN / RANGE / HIGH_VOLATILITY / NO_TRADE con umbrales configurables y validados al iniciar, motivo legible de cada decisión, distancias a pivotes H1, límites de rango M15 e histéresis (salida inmediata a estados de seguridad, confirmación para el resto).
+- `RegimeState` y `EnumRegimeToString` en `Types.mqh`.
+- `Tests/Validation/Test_Phase3.mq5`, `Test_RegimeEngine_Custom.mq5`, `SyntheticSymbol.mqh` (helper compartido).
+- `Tests/Backtesting/RegimeLogger.mq5` (EA de validación, no opera) y `CreateSyntheticXAU.mq5`.
+- `Tools/regime_report.py` (validación estadística, solo librería estándar) y `Tools/tests/test_regime_report.py`.
+
+### Cambiado
+- `Test_MarketEngine_Custom.mq5` usa `SyntheticSymbol.mqh`.
+
+### Corregido
+- Reporte estadístico: retornos solapados + posición en el rango daban significancia espuria; ahora muestreo no solapado (ver TESTING.md).
+
+### Pruebas
+- MQL5: 56/56 (Fase 3), 19/19 (integración), regresión 100/100 y 26/26; todos los `.mq5` con 0 errores y 0 warnings.
+- Python: 7/7.
+
+### Pendiente
+- Calibrar umbrales con datos reales de Deriv (RegimeLogger en tu tester + reporte), dentro y fuera de muestra.
+- Siguen pendientes los entregables de la Fase 2 en tu terminal (SymbolSpecDump, MarketEngineMonitor).
+
 ## [0.2.0] - 2026-10-12 — Fase 2: motor de mercado
 ### Añadido
 - `Include/XAUUSD/Types.mqh`: enums y estructuras compartidas (`SwingPoint`, `TFData`, `MarketSnapshot`).
