@@ -11,13 +11,13 @@
 |---|---|---|
 | Repositorio | Vacío (sin commits previos) | No hay código existente que preservar. |
 | Sistema operativo del entorno de desarrollo | Linux (contenedor en la nube) | MetaTrader 5 / MetaEditor son aplicaciones Windows. |
-| MetaTrader 5 / MetaEditor | **No instalados** | **No se puede compilar MQL5 aquí.** Ningún módulo se declarará "compilado" sin compilación real. |
-| Wine | No instalado | Opción a evaluar en Fase 2: instalar Wine + MetaEditor para `metaeditor64.exe /compile`. No verificado que funcione en este contenedor. |
+| MetaTrader 5 / MetaEditor | No venían instalados. **Actualización Fase 2:** instalados bajo Wine 9.0 (MT5 build 6257) con `Tools/setup_wine_mt5.sh` | **Se puede compilar y ejecutar scripts de prueba aquí** (`Tools/compile.sh`, `Tools/run_tests.sh`). El terminal no se conecta a ninguna cuenta. |
+| Wine | Instalado en Fase 2 (Wine 9.0) | MT5 avisa que Wine 9.0 no está soportado oficialmente (recomienda >= 10). Compilación y pruebas funcionaron; la referencia final sigue siendo tu MetaEditor en Windows. |
 | Python | 3.13 disponible | Útil para análisis offline (LearningEngine/Challenger, reportes). El paquete `MetaTrader5` de Python solo funciona en Windows, según mi conocimiento — verificar. |
-| Red saliente | Disponible (mql5.com responde) | Permite descargar documentación/instaladores si se decide usar Wine. |
-| Cuenta Deriv | No accesible desde aquí | Las especificaciones reales de XAUUSD deben leerse en el terminal (ver §9). |
+| Red saliente | Disponible | Permitió descargar el instalador oficial de MT5. |
+| Cuenta Deriv | No accesible desde aquí | Las especificaciones reales de XAUUSD deben leerse en tu terminal con `SymbolSpecDump` (ver §9). |
 
-**Conclusión:** el desarrollo de código MQL5 se hará aquí, pero **la compilación y las pruebas reales deben ejecutarse en tu MetaEditor/MT5 en Windows** (o en Wine si logramos instalarlo). Cada fase entregará un checklist de compilación para que lo ejecutes y me devuelvas los errores.
+**Conclusión:** el código se compila y se prueba aquí con datos sintéticos (símbolos personalizados). Las pruebas con datos reales de Deriv (historial, spread, calendario) solo pueden hacerse en tu terminal.
 
 ---
 
@@ -394,7 +394,8 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 9. **Ficheros**: sandbox en `MQL5/Files` (o carpeta común con `FILE_COMMON`). Los agentes del tester tienen su propio sandbox.
 10. **Sin hilos**: todo corre en un único hilo de eventos; cálculos pesados (SMC sobre muchas velas) deben ser incrementales para no bloquear `OnTick`.
 11. **ONNX**: MQL5 soporta modelos ONNX (según mi conocimiento, desde builds de 2023 — verificar). Posible vía futura para un modelo del Challenger, siempre como filtro de estrategia, nunca de riesgo.
-12. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
+12. **`TimeCurrent()` no es "ahora"**: devuelve la hora del último tick conocido (en fin de semana o sin conexión puede ser de días antes; en la Fase 2 se observó 2024-08-23 con el terminal desconectado). Para la hora actual del servidor se usa `TimeTradeServer()`.
+13. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
 
 ---
 
@@ -470,7 +471,12 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 | 12 | Validación (TESTING.md) | Criterios de aceptación |
 | 13 | Demo | Comparación demo vs backtest |
 
-## 18. Decisiones pendientes (necesito tu respuesta)
+## 18. Decisiones (aprobadas el 2026-10-12)
+
+Aprobadas por el usuario: D1 sí (módulos `Types`, `SessionClock`, `StateStore`, `Dashboard` y carpeta `Tools/`); D2 sí (`XAUUSD_AUTONOMOUS/`); D3 (a) bloquear todas las entradas nuevas si el calendario no es verificable; D4 reset diario a las 00:00 hora del servidor; D5 sí (Wine + MetaEditor instalados y funcionando); límites duros de RISK_MANAGEMENT.md §1 aprobados.
+
+Texto original de las preguntas:
+
 
 - **D1.** ¿Apruebas los módulos adicionales `Types`, `SessionClock`, `StateStore`, `Dashboard` y la carpeta `Tools/` (Python offline)?
 - **D2.** ¿Ubicación: el proyecto vive en `XAUUSD_AUTONOMOUS/` dentro de este repositorio (como está ahora)?

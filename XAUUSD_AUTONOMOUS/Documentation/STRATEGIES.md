@@ -6,9 +6,9 @@
 
 - **Pivote (swing) alto en TF**: vela `i` cuyo `high` es estrictamente mayor que los `high` de las `N` velas a la izquierda y `N` a la derecha (inicial `N = 3` en M5/M15, `N = 2` en H1). Se confirma cuando cierran las `N` velas de la derecha → retraso de `N` velas, intencional para evitar repintado.
 - **Estructura alcista**: últimos dos pivotes altos y bajos confirmados ascendentes (HH + HL). Bajista: LH + LL.
-- **Momentum**: pendiente normalizada de EMA50 (`(EMA50[1] − EMA50[1+k]) / ATR`) y posición de RSI respecto a 50. Definición exacta se fija en Fase 2.
-- **Volatilidad relativa**: `ATR(14)[1] / media(ATR(14), 100)`.
-- **Spread medio**: media móvil de spread registrada por el EA (el historial de spread por vela de `MqlRates.spread` se usará cuando exista).
+- **Momentum** (implementado en Fase 2): `ema_slope = (EMA50[0] − EMA50[k]) / ATR[0]` con `k = 5` velas cerradas; `ema_slope_prev` es la misma medida desplazada `k` velas. **Cambio de momentum** = cambio de signo entre ambas, ignorando pendientes con |valor| < 0.05 ATR. La posición del RSI respecto a 50 la usarán las estrategias directamente desde `rsi[]`.
+- **Volatilidad relativa** (implementado): `atr_ratio = ATR(14)[0] / media(ATR(14)[0..99])`.
+- **Spread medio** (implementado): media de `MqlRates.spread` de las últimas 50 velas M5 cerradas (si al menos la mitad lo trae); si el bróker no lo provee, EMA del spread muestreado por tick (requiere ≥ 100 muestras). Si no hay referencia, `spread_avg_points = 0` y los filtros relativos deben tratarlo como "sin referencia".
 
 ## 2. RegimeEngine (H1 principal, M15 de apoyo)
 

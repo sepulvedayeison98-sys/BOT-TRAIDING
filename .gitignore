@@ -12,3 +12,5 @@ XAUUSD_AUTONOMOUS/Files/*/*
 __pycache__/
 *.pyc
 .venv/
+# Logs de compilación de MetaEditor
+*.compile.log

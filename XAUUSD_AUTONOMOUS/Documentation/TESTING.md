@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **diseño (Fase 1)**. Ningún resultado de prueba existe todavía.
+> Estado: **Fase 2 completada**. Resultados registrados en §7.
 
 ## 1. Niveles de prueba
 
@@ -53,3 +53,18 @@ Beneficio neto, profit factor, DD máximo (monetario y %), expectativa por opera
 - Fichero de estado corrupto o borrado.
 - Alcanzar límite diario con posiciones abiertas.
 - Cuenta real detectada sin autorización → sin entradas.
+
+## 7. Resultados registrados
+
+### Fase 2 — 2026-10-12 (MetaEditor/MT5 build 6257 bajo Wine 9.0, Linux)
+
+| Archivo | Compilación | Ejecución |
+|---|---|---|
+| `Tests/Validation/Test_Phase2.mq5` (unitarias: reglas de calendario/DST, sesiones, conversión horaria, pivotes, estructura, validación de velas e indicadores, spread, Logger) | 0 errores, 0 warnings | **100 passed, 0 failed** |
+| `Tests/Validation/Test_MarketEngine_Custom.mq5` (integración con símbolo sintético: carga de H1/M15/M5, orientación de series, EMA contra cálculo independiente, RSI/ADX/ATR, pivotes confirmados, spread, IsNewBar, Deinit) | 0 errores, 0 warnings | **29 passed, 0 failed** |
+| `Tests/Validation/SymbolSpecDump.mq5` | 0 errores, 0 warnings | Pendiente: requiere tu cuenta demo Deriv |
+| `Tests/Validation/MarketEngineMonitor.mq5` | 0 errores, 0 warnings | Pendiente: requiere datos reales (demo o tester) |
+
+**Prueba de mutación:** se cambió a propósito la comparación estricta de pivotes (`>=` → `>`); la batería lo detectó (99/100, falla "máximos iguales no generan pivote"). Se restauró el código.
+
+**No cubierto todavía (requiere datos reales de Deriv):** historial no sincronizado, huecos reales de datos, comportamiento en la pausa diaria del oro y fines de semana, offset horario real del servidor, spread real.
