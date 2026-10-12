@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.7.0"
+#define XAU_PROJECT_VERSION "0.8.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -406,6 +406,35 @@ struct ClosedTrade
    double            commission;
    double            swap;
    string            comment;
+  };
+
+//--- Prioridad de un evento macro para el oro
+enum ENUM_NEWS_TIER
+  {
+   NEWS_TIER_NONE = 0,   // no bloquea
+   NEWS_TIER_USD,        // otros eventos USD importantes (ventana corta)
+   NEWS_TIER_MAJOR       // NFP, CPI, PCE, FOMC, tasas, Reserva Federal (ventana larga)
+  };
+
+struct NewsEvent
+  {
+   datetime          time;          // hora del SERVIDOR del bróker
+   string            currency;
+   int               importance;    // 1 baja, 2 moderada, 3 alta
+   string            name;
+   ENUM_NEWS_TIER    tier;
+  };
+
+struct NewsState
+  {
+   bool              blocked;
+   bool              source_ok;
+   string            reason;
+   string            source;        // "MT5" o "CSV"
+   datetime          last_refresh;
+   string            next_name;
+   datetime          next_time;
+   int               minutes_to_next;   // -1 si no hay próximo evento relevante
   };
 
 //--- Utilidades de texto

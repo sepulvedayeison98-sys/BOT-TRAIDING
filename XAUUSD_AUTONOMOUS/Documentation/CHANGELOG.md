@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.8.0] - 2026-10-12 — Fase 8: noticias
+### Añadido
+- `NewsManager.mqh` (calendario MT5 en vivo, CSV en tester, ventanas por prioridad, política conservadora D3), tipos `NewsEvent`/`NewsState`.
+- `Tests/Backtesting/ExportCalendar.mq5`, `Test_Phase8.mq5` (34/34).
+
 ## [0.7.0] - 2026-10-12 — Fase 7: ejecución y posiciones
 ### Añadido
 - `TradeGateway.mqh` (interfaz + `CTerminalGateway` real), `ExecutionManager.mqh`, `PositionManager.mqh`.

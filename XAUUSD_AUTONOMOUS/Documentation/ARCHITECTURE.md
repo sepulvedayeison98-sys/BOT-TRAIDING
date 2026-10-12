@@ -442,6 +442,8 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 - Los eventos con hora "todo el día"/sin hora exacta se tratan con ventana ampliada configurable.
 - No se inventan eventos; un CSV con fecha de exportación anterior al período probado se rechaza.
 
+**Implementado (Fase 8):** `NewsManager.mqh`. Horas en hora del servidor de punta a punta (calendario MT5 y CSV del tester usan la zona del bróker; que el calendario entregue hora del servidor es según mi conocimiento de la documentación — verificar con `ExportCalendar` y un evento conocido). Clasificación por nombre: NFP, CPI, PCE, FOMC, tasas, Fed/Powell = mayor (30/30 min); empleo con importancia ≥ moderada y cualquier USD de alta importancia = USD (20/20 min). Política D3: fuente con error, vacía, con más de 60 min sin recarga correcta, o instante fuera de la cobertura → bloqueo de todas las entradas nuevas. Exportador: `Tests/Backtesting/ExportCalendar.mq5`.
+
 ## 14. LearningEngine — Champion vs Challenger
 
 - **Champion (dentro del EA):** solo **lee** `Files/models/champion_vN.json` (parámetros de estrategia y umbrales de puntuación) y verifica: hash SHA-256 (`CryptEncode` con `CRYPT_HASH_SHA256` — verificar) contra `champion_vN.sha256`, campo `approved_by`/`approved_at`, y que **no contenga claves de riesgo** (lista negra explícita). Si falla → usa los parámetros por defecto compilados y lo registra.

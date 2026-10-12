@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 7 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
+> Estado: **Fase 8 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -111,3 +111,6 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 `Test_Phase7.mq5` (servidor simulado `FakeGateway.mqh`) → **74 passed, 0 failed**:
 - Ejecución: OrderCheck antes de OrderSend; solicitud correcta (tipo, volumen, SL, TP, magic, comentario, filling); slippage; anti-duplicado con pendiente; recotización → reintento; recotizaciones agotadas (exactamente 3 envíos); **timeout con operación abierta → sin reintento + reconciliación la encuentra**; sin conexión → bloqueo hasta timeout, orden en proceso mantiene el bloqueo; comentario alterado por el bróker; sin dinero; OrderCheck rechaza; spread; desvío de precio; mercado cerrado; trading no permitido; volumen fuera de paso; decisión no aprobada; filling IOC.
 - Posiciones: break-even a 1R (entrada + 10 puntos + spread), trailing ATR a 1.6R, el SL nunca se aleja, sin datos válidos no hay trailing, venta en espejo, stops level, freeze level, posición sin SL → SL protector + crítico + huérfana, cierre por invalidación, 3 fallos al modificar → crítico, trailing por pivote M5, persistencia de metadatos, solo posiciones con su magic, cierre total sin tocar otros EA, racha de pérdidas (comisión incluida).
+
+### Fase 8 — 2026-10-12
+`Test_Phase8.mq5` → **34 passed, 0 failed**: clasificación (NFP, CPI, PCE, FOMC, tasas, Powell, empleo, otros USD, baja importancia), límites exactos de las ventanas 30/30 y 20/20, próximo evento, fuente no válida / desactualizada / fuera de cobertura → bloqueo, política desactivable (informa sin bloquear), CSV del tester (carga, filtro, cobertura, sin `#range`, sin archivo), calendario no disponible sin conexión → bloqueo. La prueba encontró un bug (eventos no relevantes inyectados bloqueaban) que se corrigió.
