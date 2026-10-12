@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0] - 2026-10-12 — Fase 6: gestión de riesgo
+### Añadido
+- `RiskManager.mqh`: volumen con OrderCalcProfit + verificación cruzada + costos, margen con OrderCalcMargin, exposición agregada, pérdida diaria con peor caso, límites duros, reducción opcional tras pérdidas, protección de cuenta real, `SymbolSpecLoad`/`SymbolSpecChanged`.
+- `CDailyLossTracker` (reset configurable, depósitos, bloqueo hasta el reset, restauración/reconstrucción).
+- `StateStore.mqh`: persistencia atómica con suma de verificación.
+- `Test_Phase6.mq5` (90/90).
+
 ## [0.5.0] - 2026-10-12 — Fase 5: coordinador adaptativo
 ### Añadido
 - `AdaptiveEngine.mqh`: puntuación de 6 componentes (contexto H1 específico para reversión), umbrales 65/80, conflictos, deduplicación, setups consumidos, posiciones existentes, propuesta única con explicación.

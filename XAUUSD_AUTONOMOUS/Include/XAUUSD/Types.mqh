@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.5.0"
+#define XAU_PROJECT_VERSION "0.6.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -264,6 +264,65 @@ struct TradeProposal
    ENUM_SIGNAL_QUALITY quality;
    int               candidates;     // señales recibidas
    string            decision;       // explicación de la selección o del descarte
+  };
+
+//--- Estado de la cuenta usado por el RiskManager
+struct AccountSnapshot
+  {
+   double            balance;
+   double            equity;
+   double            margin;          // margen usado
+   double            free_margin;
+   string            currency;
+   bool              netting;         // true = Netting/Exchange, false = Hedging
+  };
+
+//--- Riesgo de una posición propia abierta
+struct PositionRisk
+  {
+   ulong             ticket;
+   ENUM_DIRECTION    direction;
+   double            volume;
+   double            open_price;
+   double            sl;              // 0 = sin SL (error crítico)
+  };
+
+//--- Especificación del símbolo relevante para riesgo y ejecución
+struct SymbolSpec
+  {
+   string            name;
+   int               digits;
+   double            point;
+   double            tick_size;
+   double            tick_value_loss;
+   double            contract_size;
+   double            volume_min;
+   double            volume_max;
+   double            volume_step;
+   double            volume_limit;    // 0 = sin límite
+   int               stops_level;     // puntos
+   int               freeze_level;    // puntos
+  };
+
+//--- Resultado del RiskManager
+struct RiskDecision
+  {
+   bool              approved;
+   bool              critical;        // el rechazo exige modo seguro (p. ej. posición sin SL)
+   string            reject_reason;
+   ENUM_DIRECTION    direction;
+   double            entry;
+   double            sl;
+   double            tp;
+   double            volume;
+   double            risk_money;      // pérdida estimada al SL con costos
+   double            risk_pct;        // sobre la base de riesgo
+   double            rr;
+   double            margin_required;
+   double            exposure_before_pct;
+   double            exposure_after_pct;
+   double            daily_loss_pct;  // pérdida del día al decidir (positivo = pérdida)
+   string            detail;
   };
 
 //--- Utilidades de texto

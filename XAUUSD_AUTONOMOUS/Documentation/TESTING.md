@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 5 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
+> Estado: **Fase 6 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -101,3 +101,8 @@ Medida de la debilidad del ADX: en la oscilación lateral sintética, la regla c
 
 ### Fase 5 — 2026-10-12
 `Test_Phase5.mq5`: puntuación por componente con valores calculados a mano (SMC 78 → moderada; con BOS y ruptura M5 96 → alta; reversión por agotamiento; breakout), noticias/fin de sesión/spread, selección de la mejor, duplicados, conflicto compra/venta, setup consumido y su caducidad, posición existente (misma zona / mismo setup / lejana), expiración, umbral, señal inválida, configuración → **44 passed, 0 failed**. Regresión Fase 4: 100/100.
+
+### Fase 6 — 2026-10-12
+`Test_Phase6.mq5` → **90 passed, 0 failed**: volumen (0.20 para 1 % con SL de 5 USD; 0.19 con comisión; 0.18 en venta con spread; base = min(balance, equity)), lote mínimo nunca redondeado hacia arriba, volumen máximo, R:R, stops level, verificación cruzada (crítica), fallo de OrderCalcProfit, margen libre y nivel de margen, reducción tras rachas (solo reduce), exposición agregada (1 %+1 % sí, 2 %+1 % no, break-even no cuenta, SL en beneficio = 0), máximo de posiciones, posición sin SL (crítico), Netting, pérdida diaria (peor caso, bloqueo enganchado, reset, depósitos/retiros, reset a las 22:00, restauración solo del mismo día, reconstrucción), límites duros, protección de cuenta real, cambio de especificación, StateStore (ida y vuelta, saneado, prefijos, corrupción, truncado).
+
+La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu terminal (el EA la hace en cada evaluación y `SymbolSpecDump` la reporta).

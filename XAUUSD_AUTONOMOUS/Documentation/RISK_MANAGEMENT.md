@@ -1,6 +1,6 @@
 # Gestión de riesgo — especificación
 
-> Estado: **diseño (Fase 1)**. RiskManager se implementa en la Fase 6 y **ninguna ejecución se habilita antes**.
+> Estado: **implementado en la Fase 6** (`Include/XAUUSD/RiskManager.mqh`, `StateStore.mqh`) y probado con 90 pruebas (`Tests/Validation/Test_Phase6.mq5`). Los límites duros de §1 están aprobados y codificados como constantes.
 > Ningún parámetro de este documento puede ser modificado por el LearningEngine.
 
 ## 1. Parámetros iniciales y límites duros
@@ -108,3 +108,10 @@ Detección en `OnInit` con `AccountInfoInteger(ACCOUNT_MARGIN_MODE)`:
 - Pérdida diaria con flotante, depósitos y retiros a mitad del día, reinicio del EA a mitad del día.
 - Netting: rechazo de 2.ª posición.
 - Inputs fuera de límites duros → `INIT_PARAMETERS_INCORRECT`.
+
+## 10. Notas de implementación (Fase 6)
+- `OrderCalcProfit`/`OrderCalcMargin` están detrás de `CTradeCalculator`: en producción `CTerminalCalculator` (funciones reales de MT5); en pruebas, un calculador simulado.
+- Verificación cruzada: si `OrderCalcProfit` difiere en más de un 5 % del cálculo por tick value, el rechazo es **crítico** (el EA entra en modo seguro), porque indica especificación o conversión de divisa incoherentes.
+- Orden de comprobaciones: inicialización → coherencia de precios → límite diario → R:R → stops level → número de posiciones / Netting → exposición existente (posición sin SL = crítico) → volumen → exposición agregada → peor caso del día → margen.
+- `CDailyLossTracker`: el EA llama a `Update(hora_servidor, equity)` en cada temporizador; el bloqueo queda "enganchado" hasta el siguiente reset. El estado se persiste en `StateStore` y solo se restaura si es del mismo día.
+- `StateStore`: archivo clave=valor, escritura atómica (`.tmp` + `FileMove`), suma FNV-1a; estado alterado o truncado = corrupto → modo seguro.
