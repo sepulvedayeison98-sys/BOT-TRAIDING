@@ -6,6 +6,7 @@
 - El bloqueo diario guardado solo se restaura si se calculó con el mismo alcance; se guarda `daily.scope`.
 - Panel, telemetría (`daily_scope`) y dashboard web indican el alcance. Sin "-0.00 %" en la pérdida/ganancia diaria.
 - Pruebas: `Test_Phase6` 103/103; `SMOKE_STATE_EDIT=scope` en `run_ea_smoke.sh` (12/12).
+- MarketEngine: con historial insuficiente, el EA pide al terminal las velas que faltan (descarga desde el servidor) y el motivo indica desde qué fecha tiene datos el servidor (observado en la demo de Deriv: 210 velas H1 de 700).
 
 ## [1.1.0] - 2026-10-14 — Dashboard web
 ### Añadido

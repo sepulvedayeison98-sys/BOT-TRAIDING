@@ -396,8 +396,14 @@ private:
       int bars = (first > 0 && first <= start) ? Bars(m_cfg.symbol, tf, first, start) : 0;
       if(bars < m_cfg.min_history_bars)
         {
-         d.invalid_reason = StringFormat("%s: historial insuficiente antes de %s (%d < %d)", tfname,
-                                         TimeToString(start), bars, m_cfg.min_history_bars);
+         // Pide al terminal las velas que faltan: copiar datos ausentes inicia su descarga desde el
+         // servidor (asíncrona). Se reintenta en cada evaluación hasta completar el historial.
+         datetime req[];
+         CopyTime(m_cfg.symbol, tf, start, m_cfg.min_history_bars, req);
+         datetime server_first = (datetime)SeriesInfoInteger(m_cfg.symbol, tf, SERIES_SERVER_FIRSTDATE);
+         d.invalid_reason = StringFormat("%s: historial insuficiente antes de %s (%d < %d; descargando, servidor desde %s)", tfname,
+                                         TimeToString(start), bars, m_cfg.min_history_bars,
+                                         (server_first > 0 ? TimeToString(server_first, TIME_DATE) : "?"));
          return false;
         }
       //--- velas cerradas: índice de la última vela abierta en o antes de `start`.
