@@ -162,6 +162,14 @@ public:
       return n;
      }
 
+   virtual bool      PositionAlive(const long identifier)
+     {
+      for(int i = 0; i < ArraySize(positions); i++)
+         if(positions[i].identifier == identifier)
+            return true;
+      return false;
+     }
+
    virtual bool      HasOrderWithComment(const string symbol, const long magic, const string comment) { return order_in_process; }
 
    virtual bool      FindEntryDeal(const string symbol, const long magic, const string comment, const datetime from,

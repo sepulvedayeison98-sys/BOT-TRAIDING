@@ -29,6 +29,8 @@ public:
    virtual int       ClosedTrades(const string symbol, const long magic, const datetime from, const datetime to,
                                   ClosedTrade &out[]) = 0;
    virtual long      FillingFlags(const string symbol) = 0;
+   //--- ¿Sigue abierta la posición con este identificador?
+   virtual bool      PositionAlive(const long identifier) = 0;
   };
 
 //+------------------------------------------------------------------+
@@ -76,6 +78,17 @@ public:
    virtual bool      Check(MqlTradeRequest &req, MqlTradeCheckResult &res) { ZeroMemory(res); return OrderCheck(req, res); }
    virtual bool      Send(MqlTradeRequest &req, MqlTradeResult &res)       { ZeroMemory(res); return OrderSend(req, res); }
    virtual long      FillingFlags(const string symbol)                     { return SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE); }
+
+   virtual bool      PositionAlive(const long identifier)
+     {
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+         ulong t = PositionGetTicket(i);
+         if(t != 0 && PositionSelectByTicket(t) && PositionGetInteger(POSITION_IDENTIFIER) == identifier)
+            return true;
+        }
+      return false;
+     }
 
    virtual int       Positions(const string symbol, const long magic, PositionInfo &out[])
      {
