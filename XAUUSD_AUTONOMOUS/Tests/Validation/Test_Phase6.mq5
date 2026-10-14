@@ -307,6 +307,35 @@ void TestDaily(CTestRunner &t)
    t.EqDbl(dr.E0(), 9900, 1e-9, "reconstrucción: balance 10200 - realizado 300");
    t.True(dr.Reconstructed(), "marca la base como reconstruida");
 
+   //--- alcance: solo operaciones del EA (1.1.1)
+   CDailyLossTracker de;
+   de.Configure(0, 3.0);
+   de.Update(DAY, 10000);
+   t.True(de.Scope() == DAILY_SCOPE_ACCOUNT, "alcance por defecto del objeto: toda la cuenta");
+   t.EqDbl(de.LossPct(9216), 7.84, 1e-9, "cuenta: pérdida manual de 7.84% cuenta");
+   de.SetScope(DAILY_SCOPE_EA);
+   de.SetOwnPnL(0.0);
+   t.EqDbl(de.LossPct(9216), 0.0, 1e-9, "EA: la pérdida manual no cuenta");
+   t.True(!de.LimitReached(9216), "EA: sin bloqueo por pérdidas ajenas");
+   de.SetOwnPnL(-200.0);
+   t.EqDbl(de.LossPct(9216), 2.0, 1e-9, "EA: pérdida propia 200 / E0 10000 = 2%");
+   de.AddBalanceOperation(5000);
+   t.EqDbl(de.PnL(20000), -200.0, 1e-9, "EA: depósitos y equity ajena no alteran el PnL propio");
+   de.SetOwnPnL(150.0);
+   t.EqDbl(de.GainPct(0), 1.5, 1e-9, "EA: ganancia propia 1.5%");
+   de.SetOwnPnL(-300.0);
+   t.True(de.LimitReached(9216), "EA: pérdida propia 3% -> bloqueo");
+   de.SetOwnPnL(100.0);
+   t.True(de.LimitHit(), "EA: el bloqueo se mantiene hasta el reset");
+   t.True(de.Update(DAY + 86400, 9300) && !de.LimitHit() && de.OwnPnL() == 0.0, "EA: el reset limpia bloqueo y PnL propio");
+   t.EqDbl(de.E0(), 9300, 1e-9, "EA: E0 sigue siendo la equity de la cuenta al reset");
+   //--- RiskManager con alcance EA: la pérdida ajena no entra en el peor caso
+   Account(acc, 9300, 8800);
+   de.SetOwnPnL(-50.0);
+   d = rm.Assess(Sig(DIR_LONG, 2400, 2395, 2410), spec, acc, none, de, 20, 0);
+   t.True(d.approved, "EA: pérdida ajena de 5.4% no bloquea; propia 0.54% + riesgo dentro del límite: " + d.reject_reason);
+   t.EqDbl(d.daily_loss_pct, 50.0 / 9300.0 * 100.0, 1e-9, "EA: pérdida diaria informada = la propia");
+
    //--- sin inicializar
    CDailyLossTracker empty;
    empty.Configure(0, 3.0);

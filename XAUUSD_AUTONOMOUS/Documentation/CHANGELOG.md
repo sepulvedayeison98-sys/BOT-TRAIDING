@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1] - 2026-10-14 — Pérdida diaria solo de las operaciones del EA
+### Cambiado
+- Nuevo parámetro `InpDailyLossScope` (por defecto **solo operaciones del EA**): las pérdidas manuales o de otros EA en la misma cuenta ya no bloquean al EA. `DAILY_SCOPE_ACCOUNT` mantiene el comportamiento anterior. Decisión del usuario tras un bloqueo por una pérdida manual del 7,84 % en la cuenta demo.
+- El bloqueo diario guardado solo se restaura si se calculó con el mismo alcance; se guarda `daily.scope`.
+- Panel, telemetría (`daily_scope`) y dashboard web indican el alcance. Sin "-0.00 %" en la pérdida/ganancia diaria.
+- Pruebas: `Test_Phase6` 103/103; `SMOKE_STATE_EDIT=scope` en `run_ea_smoke.sh` (12/12).
+
 ## [1.1.0] - 2026-10-14 — Dashboard web
 ### Añadido
 - `WebDashboard/server.py` (Python estándar, SQLite), interfaz `WebDashboard/static/` (equity, estado, pérdida diaria, exposición, régimen, mercado, decisiones, gráfico de 3 días con tabla, control remoto con confirmación, historial de comandos; modo claro/oscuro; móvil) `WebDashboard/README.md` (despliegue con systemd + Caddy) y `iniciar_dashboard.bat`/`.ps1` (arranque con doble clic en el PC de MT5).

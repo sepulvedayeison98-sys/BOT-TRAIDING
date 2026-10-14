@@ -53,12 +53,18 @@ fi
 LOGDIR="$MT_DIR/MQL5/Files/XAUUSD/logs"
 STATE="$MT_DIR/MQL5/Files/XAUUSD/state_XAUSYN_26101201.dat"
 rm -f "$LOGDIR"/XAUUSD_Autonomous_*.log "$MT_DIR/MQL5/Files/XAUUSD/reports/FeedTicksSmoke.txt"
-# SMOKE_STATE_EDIT=pause|corrupt: modifica el estado guardado antes del reinicio
+# SMOKE_STATE_EDIT=pause|corrupt|scope: modifica el estado guardado antes del reinicio
+#   scope: bloqueo diario guardado con alcance "toda la cuenta" (E0 10000, equity sin cuenta = 0,
+#   es decir -100 %): con el alcance por defecto "solo EA" debe reevaluarse y NO bloquear.
 EDIT="${SMOKE_STATE_EDIT:-}"
 if [ "$RESTART" = "1" ]; then
   [ -f "$STATE" ] || { echo "FAIL: no hay estado previo para la prueba de reinicio"; exit 1; }
   if [ "$EDIT" = "pause" ]; then python3 Tools/edit_state.py "$STATE" set ea.state PAUSED; fi
   if [ "$EDIT" = "corrupt" ]; then python3 Tools/edit_state.py "$STATE" corrupt; fi
+  if [ "$EDIT" = "scope" ]; then
+    python3 Tools/edit_state.py "$STATE" set daily.e0 10000.00000000 && python3 Tools/edit_state.py "$STATE" set daily.limit 1 \
+      && python3 Tools/edit_state.py "$STATE" set daily.scope ACCOUNT || { echo "FAIL: no se pudo editar el estado"; exit 1; }
+  fi
 else
   rm -f "$STATE"
 fi
@@ -87,6 +93,11 @@ if [ "$RESTART" = "1" ]; then
     check "reinicio con estado alterado: modo seguro (entradas bloqueadas)" "grep -P '\tBAR\t' \"$LOG\" | grep -q 'ESTADO SAFE_MODE'"
   else
     check "reinicio: estado previo válido (sin modo seguro)" "! grep -q 'estado persistente corrupto' \"$LOG\""
+  fi
+  if [ "$EDIT" = "scope" ]; then
+    check "alcance cambiado: el bloqueo guardado se reevalúa" "grep -q 'DAILY_SCOPE_CHANGED' \"$LOG\""
+    check "alcance EA: la pérdida de la cuenta (-100 %) no cuenta" "grep -P '\tDAILY_SCOPE\t' \"$LOG\" | grep -q 'solo operaciones del EA; hoy 0.00%'"
+    check "alcance EA: sin bloqueo diario en las velas" "! grep -P '\tBAR\t' \"$LOG\" | grep -q 'LÍMITE DIARIO\|DAILY_LIMIT'"
   fi
   if [ "$EDIT" = "pause" ]; then
     check "reinicio: pausa restaurada" "grep -q 'restaurado: entradas pausadas' \"$LOG\""

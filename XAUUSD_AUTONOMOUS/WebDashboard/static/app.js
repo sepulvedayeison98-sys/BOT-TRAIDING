@@ -83,7 +83,8 @@ function render(s) {
   text("state-icon", icon);
   text("state-reason", t.state_reason);
   text("daily-loss", fmtPct(t.daily_loss_pct));
-  text("daily-limit", typeof t.daily_limit_pct === "number" ? "límite " + fmtPct(t.daily_limit_pct) : "");
+  const scope = t.daily_scope === "EA" ? " · solo operaciones del EA" : (t.daily_scope === "ACCOUNT" ? " · toda la cuenta" : "");
+  text("daily-limit", typeof t.daily_limit_pct === "number" ? "límite " + fmtPct(t.daily_limit_pct) + scope : "");
   const meter = $("daily-meter");
   if (typeof t.daily_loss_pct === "number" && t.daily_limit_pct > 0) {
     const ratio = Math.min(1, t.daily_loss_pct / t.daily_limit_pct);

@@ -40,6 +40,7 @@ Compilar cada `.mq5` en MetaEditor (F7). Resultado esperado: `0 errors, 0 warnin
 |---|---|---|
 | Riesgo | `InpRiskPct` / `InpMaxExposurePct` / `InpMaxPositions` / `InpDailyLossPct` / `InpMinRR` | 1 % / 2 % / 3 / 3 % / 2.0 |
 | Riesgo | `InpDailyResetHour` | 0 (hora del servidor) |
+| Riesgo | `InpDailyLossScope` | solo operaciones del EA (alternativa: toda la cuenta) |
 | Seguridad | `InpAllowRealAccount` / `InpRealAccountConfirmation` | false / vacío |
 | Posiciones | break-even / trailing | 1.0R / 1.5R (ATR M5 × 1.5) |
 | Noticias | mayores / USD / bloqueo si no verificable | 30/30 min, 20/20 min, sí |

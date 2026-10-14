@@ -180,7 +180,22 @@ bool RiskValidateConfig(const RiskConfig &c, string &reason)
 //| Equity - E0 - depósitos netos del día. Incluye realizado,        |
 //| flotante, comisiones y swaps. El bloqueo se mantiene hasta el    |
 //| siguiente reset.                                                 |
+//| Alcance (1.1.1):                                                 |
+//|  - DAILY_SCOPE_ACCOUNT: toda la cuenta (operaciones manuales y   |
+//|    de otros EA incluidas).                                       |
+//|  - DAILY_SCOPE_EA: solo las operaciones propias (magic+símbolo): |
+//|    PnL del día = realizado propio desde el reset + flotante de   |
+//|    las posiciones propias abiertas (completo, aunque vengan del  |
+//|    día anterior). El % sigue siendo sobre E0 (equity al reset).  |
 //+------------------------------------------------------------------+
+enum ENUM_DAILY_LOSS_SCOPE
+  {
+   DAILY_SCOPE_EA = 0,        // Solo operaciones del EA
+   DAILY_SCOPE_ACCOUNT = 1    // Toda la cuenta
+  };
+
+string EnumDailyScopeToString(const ENUM_DAILY_LOSS_SCOPE s) { return s == DAILY_SCOPE_EA ? "EA" : "ACCOUNT"; }
+
 class CDailyLossTracker
   {
 private:
@@ -191,6 +206,8 @@ private:
    double            m_net_deposits;
    bool              m_limit_hit;
    bool              m_reconstructed;
+   ENUM_DAILY_LOSS_SCOPE m_scope;
+   double            m_own_pnl;
 
 public:
                      CDailyLossTracker(void)
@@ -202,7 +219,15 @@ public:
       m_net_deposits = 0.0;
       m_limit_hit = false;
       m_reconstructed = false;
+      m_scope = DAILY_SCOPE_ACCOUNT;
+      m_own_pnl = 0.0;
      }
+
+   //--- Alcance y PnL propio del día (lo calcula el EA desde el historial y sus posiciones)
+   void              SetScope(const ENUM_DAILY_LOSS_SCOPE scope) { m_scope = scope; }
+   ENUM_DAILY_LOSS_SCOPE Scope(void) const     { return m_scope; }
+   void              SetOwnPnL(const double pnl)  { m_own_pnl = pnl; }
+   double            OwnPnL(void) const           { return m_own_pnl; }
 
    void              Configure(const int reset_hour, const double limit_pct)
      {
@@ -228,6 +253,7 @@ public:
       m_net_deposits = 0.0;
       m_limit_hit = false;
       m_reconstructed = false;
+      m_own_pnl = 0.0;
       return true;
      }
 
@@ -258,18 +284,26 @@ public:
 
    void              AddBalanceOperation(const double amount) { m_net_deposits += amount; }
 
-   double            PnL(const double equity) const   { return equity - m_e0 - m_net_deposits; }
+   //--- PnL del día según el alcance (con DAILY_SCOPE_EA no depende de la equity de la cuenta)
+   double            PnL(const double equity) const
+     {
+      if(m_scope == DAILY_SCOPE_EA)
+         return m_own_pnl;
+      return equity - m_e0 - m_net_deposits;
+     }
    double            LossPct(const double equity) const
      {
       if(m_e0 <= 0.0)
          return 0.0;
-      return MathMax(0.0, -PnL(equity)) / m_e0 * 100.0;
+      double loss = -PnL(equity);
+      return (loss > 0.0) ? loss / m_e0 * 100.0 : 0.0;   // sin "-0.00" cuando el PnL es 0
      }
    double            GainPct(const double equity) const
      {
       if(m_e0 <= 0.0)
          return 0.0;
-      return MathMax(0.0, PnL(equity)) / m_e0 * 100.0;
+      double gain = PnL(equity);
+      return (gain > 0.0) ? gain / m_e0 * 100.0 : 0.0;
      }
 
    //--- Evalúa y "engancha" el límite hasta el próximo reset

@@ -103,7 +103,7 @@ Medida de la debilidad del ADX: en la oscilación lateral sintética, la regla c
 `Test_Phase5.mq5`: puntuación por componente con valores calculados a mano (SMC 78 → moderada; con BOS y ruptura M5 96 → alta; reversión por agotamiento; breakout), noticias/fin de sesión/spread, selección de la mejor, duplicados, conflicto compra/venta, setup consumido y su caducidad, posición existente (misma zona / mismo setup / lejana), expiración, umbral, señal inválida, configuración → **44 passed, 0 failed**. Regresión Fase 4: 100/100.
 
 ### Fase 6 — 2026-10-12
-`Test_Phase6.mq5` → **90 passed, 0 failed**: volumen (0.20 para 1 % con SL de 5 USD; 0.19 con comisión; 0.18 en venta con spread; base = min(balance, equity)), lote mínimo nunca redondeado hacia arriba, volumen máximo, R:R, stops level, verificación cruzada (crítica), fallo de OrderCalcProfit, margen libre y nivel de margen, reducción tras rachas (solo reduce), exposición agregada (1 %+1 % sí, 2 %+1 % no, break-even no cuenta, SL en beneficio = 0), máximo de posiciones, posición sin SL (crítico), Netting, pérdida diaria (peor caso, bloqueo enganchado, reset, depósitos/retiros, reset a las 22:00, restauración solo del mismo día, reconstrucción), límites duros, protección de cuenta real, cambio de especificación, StateStore (ida y vuelta, saneado, prefijos, corrupción, truncado).
+`Test_Phase6.mq5` → **103 passed, 0 failed** (90 + 13 de alcance de la pérdida diaria en 1.1.1: la pérdida manual no cuenta con alcance EA, pérdida/ganancia propias, depósitos, bloqueo enganchado y reset, `Assess` con alcance EA): volumen (0.20 para 1 % con SL de 5 USD; 0.19 con comisión; 0.18 en venta con spread; base = min(balance, equity)), lote mínimo nunca redondeado hacia arriba, volumen máximo, R:R, stops level, verificación cruzada (crítica), fallo de OrderCalcProfit, margen libre y nivel de margen, reducción tras rachas (solo reduce), exposición agregada (1 %+1 % sí, 2 %+1 % no, break-even no cuenta, SL en beneficio = 0), máximo de posiciones, posición sin SL (crítico), Netting, pérdida diaria (peor caso, bloqueo enganchado, reset, depósitos/retiros, reset a las 22:00, restauración solo del mismo día, reconstrucción), límites duros, protección de cuenta real, cambio de especificación, StateStore (ida y vuelta, saneado, prefijos, corrupción, truncado).
 
 La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu terminal (el EA la hace en cada evaluación y `SymbolSpecDump` la reporta).
 
@@ -137,6 +137,10 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 - La definición de un símbolo personalizado solo se guarda si el terminal se cierra de forma ordenada (`TerminalClose`).
 - `SYMBOL_TRADE_TICK_VALUE_LOSS` puede ser 0 cuando no hay conversión de divisa disponible: se usa `SYMBOL_TRADE_TICK_VALUE` con advertencia en el log (el riesgo se verifica además contra `OrderCalcProfit`).
 - Mejora de robustez: el temporizador (1 s) también ejecuta la gestión protectora y la detección de vela nueva, para que la protección no dependa de que lleguen ticks al gráfico.
+
+### Alcance de la pérdida diaria (1.1.1)
+- `Test_Phase6.mq5` → 103/103 (ver arriba).
+- Prueba de humo normal 7/7 y reinicio con `SMOKE_STATE_EDIT=scope` (bloqueo guardado con alcance "toda la cuenta", E0 10000 y equity 0 sin cuenta = −100 %) → **12/12**: el bloqueo se reevalúa, la pérdida diaria con alcance EA es 0,00 % y ninguna vela queda bloqueada por el límite diario.
 
 ### Dashboard web (1.1.0)
 - `Test_WebDashboard.mq5` → **28 passed, 0 failed**: HMAC-SHA256 con 4 vectores fijos idénticos a Python (incluido RFC 4231 caso 2 y clave > 64 bytes), escape JSON y UTF-8, verificación de comandos (válido, repetido, viejo, alterado, otro token, `CLOSE_ALL` firmado → rechazado, mal formado), validación de configuración (https obligatorio salvo localhost, token ≥ 32, desactivado en el tester), nonces, intervalo y backoff.

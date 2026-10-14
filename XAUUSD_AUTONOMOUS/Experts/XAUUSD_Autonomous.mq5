@@ -16,7 +16,7 @@
 //|  - No promete rentabilidad: validar en backtest y demo.          |
 //+------------------------------------------------------------------+
 #property copyright "XAUUSD Autonomous Trading System"
-#property version   "1.10"
+#property version   "1.11"
 #property strict
 #property description "EA autónomo para XAUUSD con gestión estricta de riesgo. Trading real deshabilitado por defecto."
 
@@ -59,6 +59,7 @@ input double         InpMaxExposurePct        = 2.0;        // Exposición agreg
 input int            InpMaxPositions          = 3;          // Posiciones simultáneas (Hedging)
 input double         InpDailyLossPct          = 3.0;        // Pérdida diaria máxima (%)
 input int            InpDailyResetHour        = 0;          // Hora de reset diario (hora servidor)
+input ENUM_DAILY_LOSS_SCOPE InpDailyLossScope = DAILY_SCOPE_EA; // Pérdida diaria: solo operaciones del EA / toda la cuenta
 input double         InpMinRR                 = 2.0;        // R:R mínimo
 input double         InpCommissionPerLot      = 0.0;        // Comisión ida y vuelta por lote (moneda cuenta)
 input double         InpSlippagePoints        = 0.0;        // Colchón de slippage al SL (puntos)
@@ -228,6 +229,33 @@ void AccountDayFlows(const datetime from, double &realized, double &deposits)
      }
   }
 
+//--- PnL propio del día (magic + símbolo): realizado desde `from` (beneficio, comisión y swap de
+//--- cada deal) + flotante de las posiciones propias abiertas (beneficio + swap).
+double OwnDayPnL(const datetime from)
+  {
+   double pnl = 0.0;
+   if(HistorySelect(from, TimeTradeServer() + 60))
+      for(int i = 0; i < HistoryDealsTotal(); i++)
+        {
+         ulong d = HistoryDealGetTicket(i);
+         if(d == 0 || HistoryDealGetInteger(d, DEAL_MAGIC) != InpMagic || HistoryDealGetString(d, DEAL_SYMBOL) != g_symbol)
+            continue;
+         pnl += HistoryDealGetDouble(d, DEAL_PROFIT) + HistoryDealGetDouble(d, DEAL_COMMISSION) + HistoryDealGetDouble(d, DEAL_SWAP);
+        }
+   PositionInfo pos[];
+   int n = g_gateway.Positions(g_symbol, InpMagic, pos);
+   for(int i = 0; i < n; i++)
+      pnl += pos[i].profit;
+   return pnl;
+  }
+
+//--- Con alcance EA, actualiza el PnL propio del día antes de evaluar la pérdida diaria
+void RefreshDailyOwnPnL(void)
+  {
+   if(g_daily.Scope() == DAILY_SCOPE_EA && g_daily.DayStart() > 0)
+      g_daily.SetOwnPnL(OwnDayPnL(g_daily.DayStart()));
+  }
+
 //--- Operación cerrada de una posición a partir de su historial
 bool ClosedTradeFor(const long position_id, ClosedTrade &c)
   {
@@ -282,6 +310,7 @@ void SaveState(void)
    g_store.SetDouble("daily.e0", g_daily.E0());
    g_store.SetDouble("daily.deposits", g_daily.NetDeposits());
    g_store.SetBool("daily.limit", g_daily.LimitHit());
+   g_store.Set("daily.scope", EnumDailyScopeToString(g_daily.Scope()));
    g_store.SetDouble("equity.peak", g_peak_equity);
    g_store.SetLong("web.last_cmd", g_web.LastCommandId());
    string keys[];
@@ -342,8 +371,12 @@ bool LoadState(string &why)
    else
       if(st == "SAFE_MODE")
          SetState(EA_SAFE_MODE, "restaurado: " + g_store.Get("ea.reason", "modo seguro previo"));
+   // un bloqueo diario solo se restaura si se calculó con el mismo alcance (si cambió, se reevalúa)
+   bool same_scope = (g_store.Get("daily.scope", "ACCOUNT") == EnumDailyScopeToString(g_daily.Scope()));
+   if(g_store.GetBool("daily.limit") && !same_scope)
+      g_log.Info("EA", "DAILY_SCOPE_CHANGED", "el alcance de la pérdida diaria cambió: el bloqueo guardado se reevalúa con el nuevo alcance");
    if(!g_daily.Restore(now, (datetime)g_store.GetLong("daily.start"), g_store.GetDouble("daily.e0"),
-                       g_store.GetDouble("daily.deposits"), g_store.GetBool("daily.limit")))
+                       g_store.GetDouble("daily.deposits"), g_store.GetBool("daily.limit") && same_scope))
       g_log.Info("EA", "DAILY_NOT_RESTORED", "el estado diario guardado es de otro día o no existe");
    g_peak_equity = g_store.GetDouble("equity.peak", 0.0);
    g_web.SetLastCommandId(g_store.GetLong("web.last_cmd", 0));
@@ -540,6 +573,7 @@ int OnInit()
       return INIT_PARAMETERS_INCORRECT;
      }
    g_daily.Configure(InpDailyResetHour, InpDailyLossPct);
+   g_daily.SetScope(InpDailyLossScope);
    //--- estado persistente
    FolderCreate("XAUUSD");
    g_store.Init(StateFile(), false);
@@ -556,6 +590,10 @@ int OnInit()
       g_log.Info("EA", "DAILY_RECONSTRUCTED", StringFormat("E0 = %.2f (balance - realizado hoy %.2f - depósitos %.2f)",
                                                            g_daily.E0(), realized, deposits));
      }
+   RefreshDailyOwnPnL();
+   g_log.Info("EA", "DAILY_SCOPE", StringFormat("pérdida diaria: %s; hoy %.2f%% de %.2f%%",
+                                                (g_daily.Scope() == DAILY_SCOPE_EA ? "solo operaciones del EA" : "toda la cuenta"),
+                                                g_daily.LossPct(AccountInfoDouble(ACCOUNT_EQUITY)), InpDailyLossPct));
    g_peak_equity = MathMax(g_peak_equity, AccountInfoDouble(ACCOUNT_EQUITY));
    //--- reconciliación inicial con el servidor
    long pid;
@@ -704,6 +742,7 @@ void Pipeline(void)
    CPositionManager::Risks(pos, risks);
    AccountSnapshot acc = Account();
    int losses = g_pos.ConsecutiveLosses(TimeTradeServer() - 30 * 86400, TimeTradeServer() + 60);
+   RefreshDailyOwnPnL();
    RiskDecision rd = g_risk.Assess(sig, g_spec, acc, risks, g_daily, (tk.ask - tk.bid) / g_spec.point, losses);
    if(!rd.approved)
      {
@@ -782,6 +821,7 @@ void OnTimer()
          SetState(EA_RUNNING, "reset diario");
       g_dirty = true;
      }
+   RefreshDailyOwnPnL();   // después de un posible reset: el PnL propio se mide desde el nuevo día
    if(g_daily.LimitReached(equity) && g_state == EA_RUNNING)
       SetState(EA_DAILY_LIMIT, StringFormat("pérdida diaria %.2f%% >= %.2f%%", g_daily.LossPct(equity), InpDailyLossPct));
    g_peak_equity = MathMax(g_peak_equity, equity);
@@ -945,7 +985,8 @@ void UpdateDashboard(void)
    double base = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), equity);
    d.risk_per_trade = StringFormat("%.2f%%", g_risk.EffectiveRiskPct(0));
    d.exposure = (base > 0) ? StringFormat("%.2f%%", exp_money / base * 100.0) : "—";
-   d.daily_loss = StringFormat("%.2f%% / %.2f%%", g_daily.LossPct(equity), InpDailyLossPct);
+   d.daily_loss = StringFormat("%.2f%% / %.2f%% (%s)", g_daily.LossPct(equity), InpDailyLossPct,
+                               (g_daily.Scope() == DAILY_SCOPE_EA ? "EA" : "cuenta"));
    d.daily_gain = StringFormat("%.2f%%", g_daily.GainPct(equity));
    d.drawdown = (g_peak_equity > 0) ? StringFormat("%.2f%% desde el máximo", (g_peak_equity - equity) / g_peak_equity * 100.0) : "—";
    d.news = g_news_state.blocked ? "BLOQUEO: " + g_news_state.reason :
@@ -993,6 +1034,7 @@ string TelemetryJson(void)
    j += CWebDashboard::JsonStr("state_reason", g_state_reason) + ",";
    j += CWebDashboard::JsonNum("daily_loss_pct", g_daily.LossPct(equity), 2) + ",";
    j += CWebDashboard::JsonNum("daily_limit_pct", InpDailyLossPct, 2) + ",";
+   j += CWebDashboard::JsonStr("daily_scope", EnumDailyScopeToString(g_daily.Scope())) + ",";
    j += CWebDashboard::JsonNum("daily_gain_pct", g_daily.GainPct(equity), 2) + ",";
    j += CWebDashboard::JsonNum("exposure_pct", exposure, 2) + ",";
    j += CWebDashboard::JsonNum("risk_pct", g_risk.EffectiveRiskPct(0), 2) + ",";
