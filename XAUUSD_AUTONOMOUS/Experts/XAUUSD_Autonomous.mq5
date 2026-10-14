@@ -16,7 +16,7 @@
 //|  - No promete rentabilidad: validar en backtest y demo.          |
 //+------------------------------------------------------------------+
 #property copyright "XAUUSD Autonomous Trading System"
-#property version   "1.11"
+#property version   "1.12"
 #property strict
 #property description "EA autónomo para XAUUSD con gestión estricta de riesgo. Trading real deshabilitado por defecto."
 
@@ -1049,6 +1049,55 @@ string TelemetryJson(void)
       j += CWebDashboard::JsonNum("atr_m15", g_snap.m15.atr[0], 2) + ",";
       j += CWebDashboard::JsonNum("rsi_m15", g_snap.m15.rsi[0], 1) + ",";
      }
+   //--- 1.1.2: datos para el dashboard (límites, PnL propio, contexto, noticias, posiciones)
+   datetime srv = TimeTradeServer();
+   datetime utc = g_clock.ServerToUtc(srv);
+   j += CWebDashboard::JsonStr("time_server", TimeToString(srv, TIME_DATE | TIME_MINUTES)) + ",";
+   j += CWebDashboard::JsonStr("time_col", TimeToString(CSessionClock::UtcToColombia(utc), TIME_DATE | TIME_MINUTES)) + ",";
+   j += CWebDashboard::JsonNum("max_exposure_pct", InpMaxExposurePct, 2) + ",";
+   j += CWebDashboard::JsonNum("max_positions", InpMaxPositions, 0) + ",";
+   j += CWebDashboard::JsonNum("min_rr", InpMinRR, 2) + ",";
+   double own = (g_daily.Scope() == DAILY_SCOPE_EA) ? g_daily.OwnPnL() : OwnDayPnL(g_daily.DayStart());
+   j += CWebDashboard::JsonNum("own_pnl_today", own, 2) + ",";
+   j += CWebDashboard::JsonNum("day_start_equity", g_daily.E0(), 2) + ",";
+   j += CWebDashboard::JsonNum("peak_equity", g_peak_equity, 2) + ",";
+   j += CWebDashboard::JsonStr("regime_raw", EnumRegimeToString(g_regime_state.raw_regime)) + ",";
+   if(g_snap_valid)
+     {
+      j += CWebDashboard::JsonStr("trend_h1", EnumStructureToString(g_snap.h1.structure)) + ",";
+      j += CWebDashboard::JsonNum("adx_h1", g_snap.h1.adx[0], 1) + ",";
+      j += CWebDashboard::JsonBool("ema_fast_above", g_snap.h1.ema_fast[0] > g_snap.h1.ema_slow[0]) + ",";
+      j += CWebDashboard::JsonStr("structure_m15", EnumStructureToString(g_snap.m15.structure)) + ",";
+      j += CWebDashboard::JsonBool("momentum_m5", g_snap.m5.momentum_shift) + ",";
+     }
+   if(g_last_proposal.candidates > 0)
+     {
+      j += CWebDashboard::JsonNum("score", g_last_proposal.score.total, 0) + ",";
+      j += CWebDashboard::JsonStr("quality", EnumQualityToString(g_last_proposal.quality)) + ",";
+     }
+   if(g_last_proposal.valid)
+      j += CWebDashboard::JsonStr("strategy", EnumStrategyToString(g_last_proposal.signal.strategy)) + ",";
+   j += CWebDashboard::JsonBool("news_blocked", g_news_state.blocked) + ",";
+   j += CWebDashboard::JsonStr("news_next", g_news_state.next_name) + ",";
+   j += CWebDashboard::JsonNum("news_minutes", g_news_state.minutes_to_next, 0) + ",";
+   PositionInfo pos[];
+   int pn = g_gateway.Positions(g_symbol, InpMagic, pos);
+   string arr = "[";
+   for(int i = 0; i < pn && i < 10; i++)
+     {
+      if(i > 0)
+         arr += ",";
+      arr += "{" + CWebDashboard::JsonNum("ticket", (double)pos[i].ticket, 0) + "," +
+             CWebDashboard::JsonStr("dir", pos[i].direction == DIR_LONG ? "BUY" : "SELL") + "," +
+             CWebDashboard::JsonNum("volume", pos[i].volume, 2) + "," +
+             CWebDashboard::JsonNum("open", pos[i].open_price, (int)g_spec.digits) + "," +
+             CWebDashboard::JsonNum("sl", pos[i].sl, (int)g_spec.digits) + "," +
+             CWebDashboard::JsonNum("tp", pos[i].tp, (int)g_spec.digits) + "," +
+             CWebDashboard::JsonNum("profit", pos[i].profit, 2) + "," +
+             CWebDashboard::JsonStr("opened", TimeToString(pos[i].open_time, TIME_DATE | TIME_MINUTES)) + "}";
+     }
+   arr += "]";
+   j += "\"open_positions\":" + arr + ",";
    j += CWebDashboard::JsonStr("news", news) + ",";
    j += CWebDashboard::JsonStr("last_signal", g_last_signal_text) + ",";
    j += CWebDashboard::JsonStr("last_trade", g_last_trade_text) + ",";

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.2] - 2026-10-14 — Rediseño del dashboard web
+### Cambiado
+- Interfaz nueva con el sistema visual de los centros de control del usuario (oscuro por defecto, modo claro automático; Barlow, Barlow Condensed e IBM Plex Mono servidas localmente, licencia OFL): pestañas Resumen, Riesgo, Mercado y Control.
+- **"¿Puede abrir operaciones ahora?"**: traduce los bloqueos del EA (sesión, régimen, noticias, límite diario, conexión...) a explicaciones claras con severidad.
+- KPIs: equity, resultado del EA hoy con consumo del límite diario, exposición, posiciones (con huecos libres) y drawdown. Gráfico de equity con rangos 6 H / 24 H / 3 D, área, referencia de inicio, cifras del rango, cursor con valor y tabla.
+- Tabla de reglas de riesgo con uso y estado; lectura de mercado (régimen confirmado o no, estructura H1/M15, ADX, EMAs, momentum, spread frente a su media, ATR, RSI con zonas, noticias con cuenta atrás); control remoto que explica cuándo cada comando tiene efecto; historial con estados (en cola, entregado, aplicado, caducado).
+- Aviso de EA sin reportar con el tiempo transcurrido; la lectura se pausa con la pestaña oculta.
+- EA: la telemetría añade posiciones abiertas (ticket, tipo, lotes, entrada, SL, TP, P/L), resultado propio del día, equity al inicio del día y máxima, límites (exposición, posiciones, R:R), régimen sin confirmar, estructura H1/M15, ADX, EMAs, momentum, estrategia y puntuación, noticias (estado, próximo evento y minutos) y horas del servidor y de Colombia.
+- Servidor: sirve `.woff2`. Pruebas: 25 del servidor, E2E 34/34, EA + dashboard 15/15. Vista previa con datos de ejemplo publicada como artifact.
+
 ## [1.1.1] - 2026-10-14 — Pérdida diaria solo de las operaciones del EA
 ### Cambiado
 - Nuevo parámetro `InpDailyLossScope` (por defecto **solo operaciones del EA**): las pérdidas manuales o de otros EA en la misma cuenta ya no bloquean al EA. `DAILY_SCOPE_ACCOUNT` mantiene el comportamiento anterior. Decisión del usuario tras un bloqueo por una pérdida manual del 7,84 % en la cuenta demo.

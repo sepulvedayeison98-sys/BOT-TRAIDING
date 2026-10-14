@@ -40,6 +40,16 @@ El servidor rechaza (401) firmas inválidas, timestamps con más de 120 s de dif
 | `RESUME` | `PAUSED → RUNNING`. No saca del límite diario ni del modo seguro. |
 | `SAFE_MODE` | Modo seguro. Salir de él solo es posible desde el panel de MT5 (doble confirmación). |
 
+## 3b. Interfaz (1.1.2)
+| Pestaña | Contenido |
+|---|---|
+| 01 Resumen | Estado del EA y **"¿Puede abrir operaciones ahora?"** con cada bloqueo explicado; KPIs (equity, resultado del EA hoy frente al límite diario, exposición, posiciones, drawdown); gráfico de equity 6 H / 24 H / 3 D con tabla; posiciones abiertas; última decisión con puntuación. |
+| 02 Riesgo | Reglas (riesgo por operación, exposición, posiciones, pérdida diaria, R:R, drawdown) con valor actual, límite, uso y estado; alcance de la pérdida diaria. |
+| 03 Mercado | Régimen (confirmado o no), estructura H1/M15, ADX, EMA50 frente a EMA200, momentum M5, spread frente a su media, ATR, RSI con zonas 30/70, noticias USD con cuenta atrás. |
+| 04 Control | Pausar, reanudar y modo seguro, con cuándo tiene efecto cada uno; historial de comandos con su estado. |
+
+Sin dependencias externas: HTML, CSS y JS propios y tipografías servidas desde el propio servidor (CSP `default-src 'self'`). Oscuro por defecto y claro si el sistema lo pide; usable desde 390 px de ancho.
+
 ## 4. Seguridad
 - El token del dashboard no da acceso a la cuenta de trading: el EA no conoce ni envía credenciales. Se configura como input del EA en tu terminal y como variable de entorno del servidor; nunca en el repositorio.
 - Acceso web: contraseña (hash PBKDF2-SHA256, 200.000 iteraciones) → cookie de sesión firmada, `HttpOnly`, `SameSite=Strict`, `Secure` detrás de TLS, 12 h; token CSRF en una cabecera para cada comando; máximo 5 intentos de acceso por minuto e IP (`XAD_TRUST_PROXY=1` para usar la IP real detrás del proxy).

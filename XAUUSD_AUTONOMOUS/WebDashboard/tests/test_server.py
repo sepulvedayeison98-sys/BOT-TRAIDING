@@ -52,7 +52,7 @@ class ServerTest(unittest.TestCase):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
         c.request(method, path, body=body.encode("utf-8"), headers=headers or {})
         r = c.getresponse()
-        data = r.read().decode("utf-8")
+        data = r.read().decode("utf-8", errors="replace")   # binarios (fuentes) no se comparan como texto
         hdrs = dict(r.getheaders())
         c.close()
         return r.status, data, hdrs
@@ -227,6 +227,17 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/static/../server.py")[0], 404)
         self.assertEqual(self.req("GET", "/server.py")[0], 404)
         self.assertEqual(self.req("GET", "/static/%2e%2e/server.py")[0], 404)
+
+    def test_fonts_served_locally(self):
+        st, _, hdrs = self.req("GET", "/static/barlow-400.woff2")
+        self.assertEqual(st, 200)
+        self.assertEqual(hdrs["Content-Type"], "font/woff2")
+        with open(os.path.join(srv.STATIC_DIR, "style.css"), encoding="utf-8") as fh:
+            css = fh.read()
+        self.assertNotIn("fonts.googleapis.com", css)   # sin peticiones a terceros
+        for name in ("barlow-400", "barlow-condensed-700", "ibm-plex-mono-500"):
+            self.assertIn(f"/static/{name}.woff2", css)
+            self.assertTrue(os.path.isfile(os.path.join(srv.STATIC_DIR, name + ".woff2")))
 
     def test_no_inline_script_or_style(self):
         with open(os.path.join(srv.STATIC_DIR, "index.html"), encoding="utf-8") as fh:

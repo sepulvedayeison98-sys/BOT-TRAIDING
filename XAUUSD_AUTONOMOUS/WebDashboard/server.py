@@ -44,7 +44,7 @@ EA_ONLINE_SEC = 120
 COMMAND_TTL_SEC = 600
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".woff2": "font/woff2"}
 
 
 # ------------------------------------------------------------------ utilidades

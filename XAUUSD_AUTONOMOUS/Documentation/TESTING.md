@@ -138,6 +138,11 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 - `SYMBOL_TRADE_TICK_VALUE_LOSS` puede ser 0 cuando no hay conversión de divisa disponible: se usa `SYMBOL_TRADE_TICK_VALUE` con advertencia en el log (el riesgo se verifica además contra `OrderCalcProfit`).
 - Mejora de robustez: el temporizador (1 s) también ejecuta la gestión protectora y la detección de vela nueva, para que la protección no dependa de que lleguen ticks al gráfico.
 
+### Rediseño del dashboard (1.1.2)
+- `WebDashboard/tests/test_server.py` → **25 tests OK** (nuevo: tipografías servidas localmente con `font/woff2`, sin peticiones a Google).
+- E2E cliente MQL5 ↔ servidor → 34/34; EA completo + dashboard (`SMOKE_WEB=1`) → 15/15 con la telemetría ampliada (JSON válido, posiciones como lista).
+- Revisión visual en Chromium: 4 pestañas en oscuro y claro, 1400 px y 390 px, estados operando / bloqueado / límite diario / sin reportar: sin errores de consola ni desplazamiento horizontal.
+
 ### Alcance de la pérdida diaria (1.1.1)
 - `Test_Phase6.mq5` → 103/103 (ver arriba).
 - Prueba de humo normal 7/7 y reinicio con `SMOKE_STATE_EDIT=scope` (bloqueo guardado con alcance "toda la cuenta", E0 10000 y equity 0 sin cuenta = −100 %) → **12/12**: el bloqueo se reevalúa, la pérdida diaria con alcance EA es 0,00 % y ninguna vela queda bloqueada por el límite diario.
