@@ -9,6 +9,13 @@
 - Python 3.8+ (opcional, para los reportes y el Challenger; sin dependencias externas).
 
 ## 2. Copiar archivos al terminal
+**Opción automática (Windows):** desde la carpeta del repositorio (rama actualizada), en PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File XAUUSD_AUTONOMOUS\Tools\instalar_windows.ps1
+```
+Busca la carpeta de datos de MT5 (prefiere la de Deriv; si hay varias, pregunta), guarda copia de seguridad de versiones anteriores, copia `Include\XAUUSD`, el EA y los scripts `SymbolSpecDump`/`ExportCalendar`, compila con MetaEditor mostrando el resultado y arranca el dashboard web (`-NoDashboard` para omitirlo). No modifica la configuración de MT5 ni otros EA. Probado con un MT5 simulado en PowerShell 7; confírmalo en tu equipo.
+
+**Opción manual:**
 En MT5: *Archivo → Abrir carpeta de datos* → carpeta `MQL5/`. Copiar (o enlazar con `mklink /J`):
 
 | Origen (repositorio) | Destino (`MQL5/`) |
