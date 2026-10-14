@@ -58,10 +58,12 @@ XAUUSD_AUTONOMOUS/
 │   ├── PositionManager.mqh
 │   ├── LearningEngine.mqh
 │   ├── Dashboard.mqh        (*) panel en el gráfico
+│   ├── WebDashboard.mqh     cliente del dashboard web (1.1.0, opcional)
 │   └── Logger.mqh
 ├── Files/{history,models,reports,logs}   # datos generados (no versionados salvo .gitkeep)
 ├── Tests/{Backtesting,Validation,StressTests}
 ├── Tools/                   (*) scripts Python offline (Challenger, reportes)
+├── WebDashboard/            servidor e interfaz del dashboard web (1.1.0)
 └── Documentation/
 ```
 
@@ -461,12 +463,12 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 ## 15. Dashboard
 
 - **MT5 (Fase 10):** objetos de gráfico (`OBJ_LABEL`, `OBJ_BUTTON`, `OBJ_RECTANGLE_LABEL`) actualizados en `OnTimer` (no en cada tick). Botones: pausar/reanudar entradas, modo seguro, cerrar todas (**doble clic de confirmación en < 5 s**, no `MessageBox`, que bloquea el hilo), abrir carpeta de logs (mostrar ruta).
-- **Web (diseño posterior):** el EA solo hace **salida** HTTPS (`WebRequest`) hacia un backend propio con telemetría firmada (HMAC con token de dashboard, nunca credenciales de trading). Comandos remotos limitados a *pausa* y *modo seguro* (nunca abrir operaciones), recogidos por *polling* y firmados. Requiere: servidor HTTPS propio, URL en lista blanca del terminal, token almacenado fuera del repositorio. No se construirá ninguna conexión ficticia.
+- **Web (implementado en 1.1.0, opcional):** el EA solo hace **salida** HTTPS (`WebRequest`, desde `OnTimer`, con backoff) hacia `WebDashboard/server.py` con telemetría firmada (HMAC-SHA256 con token de dashboard, nunca credenciales de trading). Comandos remotos limitados a `PAUSE`, `RESUME` y `SAFE_MODE` (nunca abrir/cerrar operaciones ni salir del modo seguro), recogidos por *polling*, firmados por el servidor y verificados por el EA. Detalle: [WEB_DASHBOARD.md](WEB_DASHBOARD.md).
 
 ## 15b. EA integrado (Fase 11)
 - `OnInit`: símbolo (exclusivo XAUUSD salvo `InpAllowAnySymbol`), especificación, cuenta (demo / real con doble confirmación, Hedging/Netting), configuración de todos los módulos con límites duros, modelo Champion (sin riesgo), estado persistente (corrupto → modo seguro), base diaria (restaurada o reconstruida desde el historial), reconciliación de la solicitud pendiente, adopción de posiciones (sin SL → modo seguro), panel.
 - `OnTick` y `OnTimer` → gestión protectora (con límite de frecuencia) + vela M5 nueva → pipeline.
-- `OnTimer` (1 s): reloj, noticias, pérdida diaria y reset, reconciliación, cambio de especificación (→ modo seguro), guardado periódico, panel.
+- `OnTimer` (1 s): reloj, noticias, pérdida diaria y reset, reconciliación, cambio de especificación (→ modo seguro), guardado periódico, panel y, si está activado, ciclo del dashboard web.
 - `OnTradeTransaction`: depósitos/retiros (excluidos de la pérdida diaria), confirmación de entradas, cierres → diario.
 - `OnDeinit`: guarda estado y reporte; **no cierra posiciones**.
 - `OnTester`: esperanza en R × √n − 0.1 × drawdown en R (0 con menos de 30 operaciones).

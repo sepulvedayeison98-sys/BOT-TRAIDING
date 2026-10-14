@@ -15,5 +15,8 @@ TEST_TIMEOUT_SEC="${TEST_TIMEOUT_SEC:-400}" Tools/run_tests.sh "${TESTS[@]}" | g
 echo "### Pruebas Python"
 python3 -m unittest discover -s Tools/tests 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+echo "### Pruebas del servidor del dashboard web"
+python3 -m unittest discover -s WebDashboard/tests 2>&1 | tail -3
+[ "${PIPESTATUS[0]}" -eq 0 ] || status=1
 echo "### Estado global: $([ $status -eq 0 ] && echo OK || echo FALLOS)"
 exit $status

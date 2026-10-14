@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XAUUSD Autonomous</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<main class="viz-root">
+  <section id="login" class="card login" hidden>
+    <h1>XAUUSD Autonomous</h1>
+    <p class="muted">Panel de observación. No permite abrir ni cerrar operaciones.</p>
+    <form id="login-form">
+      <label for="password">Contraseña</label>
+      <input id="password" type="password" autocomplete="current-password" required minlength="12">
+      <button type="submit">Entrar</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="app" hidden>
+    <header class="topbar">
+      <div>
+        <h1>XAUUSD Autonomous</h1>
+        <p class="muted" id="subtitle">—</p>
+      </div>
+      <div class="topbar-right">
+        <span id="online" class="badge">—</span>
+        <button id="logout" class="ghost">Salir</button>
+      </div>
+    </header>
+
+    <section class="hero card">
+      <div>
+        <p class="label">Equity</p>
+        <p class="hero-value" id="equity">—</p>
+        <p class="muted" id="equity-sub">—</p>
+      </div>
+      <div class="state">
+        <p class="label">Estado del EA</p>
+        <p class="state-value"><span id="state-icon" aria-hidden="true"></span> <span id="state">—</span></p>
+        <p class="muted" id="state-reason">—</p>
+      </div>
+    </section>
+
+    <section class="tiles">
+      <div class="card tile"><p class="label">Pérdida diaria</p><p class="value" id="daily-loss">—</p><div class="meter"><div id="daily-meter"></div></div><p class="muted" id="daily-limit">—</p></div>
+      <div class="card tile"><p class="label">Ganancia diaria</p><p class="value" id="daily-gain">—</p></div>
+      <div class="card tile"><p class="label">Exposición</p><p class="value" id="exposure">—</p><p class="muted" id="exposure-sub">—</p></div>
+      <div class="card tile"><p class="label">Posiciones</p><p class="value" id="positions">—</p></div>
+      <div class="card tile"><p class="label">Drawdown</p><p class="value" id="drawdown">—</p></div>
+      <div class="card tile"><p class="label">Régimen</p><p class="value small" id="regime">—</p><p class="muted" id="session">—</p></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Equity (últimos 3 días)</h2>
+        <button id="toggle-table" class="ghost">Ver tabla</button>
+      </div>
+      <div id="chart" class="chart" role="img" aria-label="Evolución de la equity"></div>
+      <div id="chart-tip" class="tip" hidden></div>
+      <table id="equity-table" hidden><thead><tr><th>Hora</th><th>Equity</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="grid2">
+      <div class="card">
+        <h2>Mercado</h2>
+        <dl class="kv">
+          <dt>Spread</dt><dd id="spread">—</dd>
+          <dt>ATR (M15)</dt><dd id="atr">—</dd>
+          <dt>RSI (M15)</dt><dd id="rsi">—</dd>
+          <dt>Noticias</dt><dd id="news">—</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Decisiones</h2>
+        <dl class="kv">
+          <dt>Última señal</dt><dd id="last-signal">—</dd>
+          <dt>Última operación</dt><dd id="last-trade">—</dd>
+          <dt>Bloqueos</dt><dd id="blocks">—</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Control remoto</h2>
+      <p class="muted">Solo pausar, reanudar o activar el modo seguro. Cerrar posiciones y salir del modo seguro solo desde MT5.</p>
+      <div class="actions" id="actions">
+        <button data-cmd="PAUSE">Pausar entradas</button>
+        <button data-cmd="RESUME">Reanudar entradas</button>
+        <button data-cmd="SAFE_MODE" class="danger">Modo seguro</button>
+      </div>
+      <p id="cmd-msg" class="muted" role="status"></p>
+      <table id="commands"><thead><tr><th>#</th><th>Comando</th><th>Creado</th><th>Estado</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <dialog id="confirm">
+      <form method="dialog">
+        <p id="confirm-text">¿Confirmar?</p>
+        <menu><button value="cancel" class="ghost">Cancelar</button><button value="ok" id="confirm-ok">Confirmar</button></menu>
+      </form>
+    </dialog>
+  </section>
+</main>
+</body>
+</html>

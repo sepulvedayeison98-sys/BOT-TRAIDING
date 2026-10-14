@@ -138,6 +138,18 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 - `SYMBOL_TRADE_TICK_VALUE_LOSS` puede ser 0 cuando no hay conversión de divisa disponible: se usa `SYMBOL_TRADE_TICK_VALUE` con advertencia en el log (el riesgo se verifica además contra `OrderCalcProfit`).
 - Mejora de robustez: el temporizador (1 s) también ejecuta la gestión protectora y la detección de vela nueva, para que la protección no dependa de que lleguen ticks al gráfico.
 
+### Dashboard web (1.1.0)
+- `Test_WebDashboard.mq5` → **28 passed, 0 failed**: HMAC-SHA256 con 4 vectores fijos idénticos a Python (incluido RFC 4231 caso 2 y clave > 64 bytes), escape JSON y UTF-8, verificación de comandos (válido, repetido, viejo, alterado, otro token, `CLOSE_ALL` firmado → rechazado, mal formado), validación de configuración (https obligatorio salvo localhost, token ≥ 32, desactivado en el tester), nonces, intervalo y backoff.
+- `WebDashboard/tests/test_server.py` → **24 tests OK**.
+- **Extremo a extremo** (`Tools/run_web_e2e.sh`, MT5 bajo Wine ↔ servidor real en 127.0.0.1) → **28/28**: telemetría firmada aceptada (texto con comillas y "ñ" intacto), comando `PAUSE` recibido, verificado y confirmado, sin repetición tras confirmar.
+- **EA completo + servidor** (`SMOKE_WEB=1 Tools/run_ea_smoke.sh`) → **15/15**: 8 envíos de telemetría con el símbolo correcto, `PAUSE` aplicado y confirmado, el servidor ve `PAUSED`, las velas siguientes quedan bloqueadas por `ESTADO PAUSED`, `web.last_cmd=1` persistido.
+- Interfaz revisada en Chromium (claro, oscuro, 390 px): sin errores de consola ni desplazamiento horizontal; tooltip y crosshair del gráfico funcionando.
+
+**Hallazgos:**
+- Las claves `WebRequest`/`WebRequestUrl` en texto plano de un `.ini` de arranque **no** autorizan la URL: MT5 guarda la lista cifrada en `Config/common.ini` y solo se configura desde *Opciones* (en el entorno de pruebas se hizo con la interfaz gráfica).
+- El cliente WinINet de MT5 reutiliza la conexión: con un servidor HTTP/1.0 la segunda petición fallaba (código 1003). El servidor usa HTTP/1.1 persistente (prueba añadida).
+- La serie de equity tenía un límite de 720 filas (≈ 6 h a 30 s, no 3 días): ahora se agrega por intervalos (prueba añadida).
+
 ## 8. Lo que falta validar (requiere tu terminal y cuenta demo)
 
 | # | Prueba (Fase 12–13) | Cómo | Criterio |
@@ -154,5 +166,6 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 | 10 | Límites de riesgo | en demo con `InpDailyLossPct` bajo (p. ej. 1 %) | bloqueo diario, gestión protectora activa |
 | 11 | Hedging/Netting | si Deriv ofrece ambos tipos de cuenta demo | Netting: máximo 1 posición, sin promediar |
 | 12 | Demo prolongada | varias semanas (distintos regímenes) | comparar ejecución real (slippage, spread, rechazos) con el backtest |
+| 13 | Dashboard web (opcional) | desplegar según `WebDashboard/README.md`, permitir la URL en MT5, probar PAUSE/RESUME/SAFE_MODE en demo | estado reflejado en ≤ 1 ciclo; comando en el log del EA y en la auditoría |
 
 Nada de lo anterior está hecho todavía; ningún resultado aquí es una métrica de rendimiento.

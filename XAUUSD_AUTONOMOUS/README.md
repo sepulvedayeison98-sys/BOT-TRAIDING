@@ -2,7 +2,7 @@
 
 Expert Advisor modular para MetaTrader 5 (Deriv), exclusivo para **XAUUSD**, intradía (H1 contexto, M15 estructura, M5 ejecución), sesiones de Londres y Nueva York.
 
-> **Estado: v1.0.0 — EA integrado y probado con datos sintéticos.** Falta la validación con datos reales de Deriv (backtest, walk-forward y demo), que requiere tu terminal y tu cuenta demo. **No se promete rentabilidad.** El trading real está deshabilitado por defecto.
+> **Estado: v1.1.0 — EA integrado y probado con datos sintéticos, con dashboard web opcional.** Falta la validación con datos reales de Deriv (backtest, walk-forward y demo), que requiere tu terminal y tu cuenta demo. **No se promete rentabilidad.** El trading real está deshabilitado por defecto.
 
 ## Cómo decide
 1. **MarketEngine**: H1/M15/M5 con velas cerradas; EMA50/200, RSI14, ADX14, ATR14, pivotes confirmados (sin repintado), estructura, volatilidad, momentum, spread; validación de datos.
@@ -15,6 +15,7 @@ Expert Advisor modular para MetaTrader 5 (Deriv), exclusivo para **XAUUSD**, int
 8. **PositionManager**: break-even 1R, trailing 1.5R, cierre por invalidación, el SL nunca se aleja; Hedging y Netting.
 9. **NewsManager**: NFP/CPI/PCE/FOMC/tasas/Fed ±30 min, otros USD ±20 min; si el calendario no es verificable, no se opera.
 10. **LearningEngine** (Champion) + **`Tools/challenger.py`** (Challenger offline): diario, métricas, IS/OOS/walk-forward, promoción solo con tu aprobación; nunca toca el riesgo.
+11. **Dashboard web** (opcional): telemetría firmada (HMAC) hacia tu servidor y, como máximo, pausar/reanudar/modo seguro desde el navegador.
 
 ## Documentación
 - [Instalación y uso](Documentation/INSTALLATION.md)
@@ -22,7 +23,7 @@ Expert Advisor modular para MetaTrader 5 (Deriv), exclusivo para **XAUUSD**, int
 - [Gestión de riesgo](Documentation/RISK_MANAGEMENT.md)
 - [Estrategias](Documentation/STRATEGIES.md)
 - [Pruebas y validación](Documentation/TESTING.md)
-- [Dashboard web (diseño)](Documentation/WEB_DASHBOARD.md)
+- [Dashboard web](Documentation/WEB_DASHBOARD.md) · [instalación del servidor](WebDashboard/README.md)
 - [Changelog](Documentation/CHANGELOG.md)
 
 ## Estructura
@@ -33,5 +34,6 @@ Tests/Validation/                  pruebas unitarias e integración (scripts MQL
 Tests/Backtesting/                 RegimeLogger, ExportCalendar, CreateSyntheticXAU
 Tests/StressTests/                 FeedTicksSmoke (prueba de humo del EA)
 Tools/                             compilación/pruebas bajo Wine, regime_report.py, challenger.py
+WebDashboard/                      servidor (Python estándar) e interfaz web del dashboard
 Files/                             datos generados (no versionados)
 ```

@@ -61,10 +61,14 @@ Compilar cada `.mq5` en MetaEditor (F7). Resultado esperado: `0 errors, 0 warnin
 XAUUSD_AUTONOMOUS/Tools/setup_wine_mt5.sh     # una vez: Wine + Xvfb + MT5
 XAUUSD_AUTONOMOUS/Tools/run_all_tests.sh      # compila todo y ejecuta todas las pruebas
 XAUUSD_AUTONOMOUS/Tools/run_ea_smoke.sh       # EA completo en el terminal con datos sintéticos (sin cuenta)
+XAUUSD_AUTONOMOUS/Tools/run_web_e2e.sh        # cliente web MQL5 <-> servidor (requiere la URL local permitida)
 ```
 El terminal bajo Wine no se conecta a ninguna cuenta. MT5 avisa que Wine 9.0 no está soportado oficialmente; la referencia final es tu MetaEditor en Windows.
 
-## 8. Seguridad
-- Nunca subir al repositorio contraseñas, número de cuenta, tokens ni `.set`/`.ini` con datos sensibles (están en `.gitignore`).
+## 8. Dashboard web (opcional)
+Telemetría en el navegador/teléfono y pausa/reanudación/modo seguro remotos (nada más). Requiere un servidor propio con HTTPS: ver [WebDashboard/README.md](../WebDashboard/README.md). En el EA: añadir la URL en *Opciones → Asesores Expertos → WebRequest* y configurar `InpWebEnabled`, `InpWebUrl`, `InpWebToken`, `InpWebIntervalSec`. Si el servidor no responde, el EA sigue operando igual.
+
+## 9. Seguridad
+- Nunca subir al repositorio contraseñas, número de cuenta, tokens ni `.set`/`.ini`/`.env` con datos sensibles (están en `.gitignore`).
 - El EA no necesita credenciales: usa la sesión abierta del terminal.
 - Quitar el EA del gráfico **no cierra** posiciones; las protecciones (SL/TP) quedan en el servidor.

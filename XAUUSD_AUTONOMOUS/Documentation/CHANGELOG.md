@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.0] - 2026-10-14 — Dashboard web
+### Añadido
+- `WebDashboard/server.py` (Python estándar, SQLite), interfaz `WebDashboard/static/` (equity, estado, pérdida diaria, exposición, régimen, mercado, decisiones, gráfico de 3 días con tabla, control remoto con confirmación, historial de comandos; modo claro/oscuro; móvil) y `WebDashboard/README.md` (despliegue con systemd + Caddy).
+- `Include/XAUUSD/WebDashboard.mqh`: cliente MQL5 con HMAC-SHA256, verificación de comandos firmados (solo PAUSE/RESUME/SAFE_MODE, ≤ 10 min, id nuevo) y backoff ante fallos.
+- EA: grupo de parámetros *Dashboard web* (`InpWebEnabled=false` por defecto), telemetría, aplicación de comandos, persistencia de `web.last_cmd`, desactivado en el tester.
+- Pruebas: `Test_WebDashboard.mq5` (28/28; vectores HMAC iguales a Python), `WebDashboard/tests/test_server.py` (24), `Tools/run_web_e2e.sh` (MQL5 real ↔ servidor real, 28/28) y `SMOKE_WEB=1` en `run_ea_smoke.sh` (15/15).
+
+### Cambiado
+- `run_all_tests.sh` incluye las pruebas del servidor web. `Documentation/WEB_DASHBOARD.md` describe la implementación (antes solo diseño).
+- `.gitignore`: bases SQLite y archivos `.env`.
+
 ## [1.0.0] - 2026-10-14 — Fases 10–11: panel e integración
 ### Añadido
 - `Experts/XAUUSD_Autonomous.mq5`: EA integrado (pipeline, gates, estados, persistencia, reconciliación, diario, panel, OnTester).

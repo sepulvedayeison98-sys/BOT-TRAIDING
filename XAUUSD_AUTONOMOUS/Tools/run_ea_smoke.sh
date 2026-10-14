@@ -7,6 +7,9 @@
 #   - FeedTicksSmoke inyecta ticks acelerados y cierra el terminal,
 #   - se verifican el log del EA, el archivo de estado y el cierre ordenado.
 # Requiere que XAUSYN exista (Tests/Backtesting/CreateSyntheticXAU.mq5).
+# SMOKE_WEB=1: además arranca WebDashboard/server.py en 127.0.0.1:8080 con un token temporal,
+#   encola un PAUSE y verifica telemetría, aplicación del comando, confirmación y persistencia
+#   (requiere http://127.0.0.1:8080 permitida para WebRequest en este terminal; ver run_web_e2e.sh).
 set -u
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export WINEPREFIX="${WINEPREFIX:-/root/.wine-mt5}" WINEDEBUG=-all DISPLAY="${DISPLAY:-:99}"
@@ -33,6 +36,20 @@ mkdir -p "$MT_DIR/MQL5/Experts/XAUUSD" "$MT_DIR/MQL5/Scripts/XAUUSD_Tests" "$MT_
 cp Experts/XAUUSD_Autonomous.ex5 "$MT_DIR/MQL5/Experts/XAUUSD/"
 cp Tests/StressTests/FeedTicksSmoke.ex5 "$MT_DIR/MQL5/Scripts/XAUUSD_Tests/"
 printf 'InpAllowAnySymbol=true\r\nInpSymbolOverride=XAUSYN\r\nInpRunTag=smoke\r\nInpShowDashboard=true\r\n' > "$MT_DIR/MQL5/Presets/xau_smoke.set"
+WEB="${SMOKE_WEB:-0}"
+if [ "$WEB" = "1" ]; then
+  WORK="$(mktemp -d)"
+  export XAD_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+  export XAD_SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+  export XAD_PASSWORD_HASH="$(python3 -c 'import sys; sys.path.insert(0, "WebDashboard"); import server; print(server.hash_password("smoke-password-123", 2000))')"
+  export XAD_DB="$WORK/smoke.sqlite3" XAD_PORT=8080 XAD_BIND=127.0.0.1 XAD_COOKIE_SECURE=0
+  python3 WebDashboard/server.py serve > "$WORK/server.log" 2>&1 &
+  SRV=$!
+  trap 'kill $SRV 2>/dev/null' EXIT
+  for _ in $(seq 1 20); do curl -s -o /dev/null "http://127.0.0.1:8080/" && break; sleep 0.5; done
+  python3 -c 'import sys, time; sys.path.insert(0, "WebDashboard"); import server; server.Store(sys.argv[1]).add_command("PAUSE", "smoke", int(time.time()))' "$XAD_DB"
+  printf 'InpWebEnabled=true\r\nInpWebUrl=http://127.0.0.1:8080\r\nInpWebToken=%s\r\nInpWebIntervalSec=10\r\n' "$XAD_TOKEN" >> "$MT_DIR/MQL5/Presets/xau_smoke.set"
+fi
 LOGDIR="$MT_DIR/MQL5/Files/XAUUSD/logs"
 STATE="$MT_DIR/MQL5/Files/XAUUSD/state_XAUSYN_26101201.dat"
 rm -f "$LOGDIR"/XAUUSD_Autonomous_*.log "$MT_DIR/MQL5/Files/XAUUSD/reports/FeedTicksSmoke.txt"
@@ -77,6 +94,26 @@ if [ "$RESTART" = "1" ]; then
   fi
 fi
 [ "$EDIT" = "corrupt" ] || check "sin errores críticos" "[ $(grep -c $'\tCRITICAL\t' "$LOG") -eq 0 ]"
+if [ "$WEB" = "1" ]; then
+  WEBRES="$(python3 - "$XAD_DB" <<'PY'
+import json, sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+rows = [json.loads(r[0]) for r in db.execute("SELECT body FROM telemetry ORDER BY rowid")]
+cmd = db.execute("SELECT acked FROM commands ORDER BY id LIMIT 1").fetchone()
+states = {r.get("state") for r in rows}
+print(len(rows), rows[-1].get("symbol") if rows else "-", int(bool(cmd and cmd[0])), int("PAUSED" in states))
+PY
+)"
+  read -r WN WSYM WACK WPAUSED <<< "$WEBRES"
+  echo "web: telemetrías=$WN símbolo=$WSYM confirmado=$WACK estado_PAUSED_reportado=$WPAUSED"
+  check "web: telemetría recibida (>= 2 envíos)" "[ \"$WN\" -ge 2 ]"
+  check "web: símbolo correcto en la telemetría" "[ \"$WSYM\" = XAUSYN ]"
+  check "web: comando PAUSE aplicado por el EA" "grep -q 'pausa remota desde el dashboard web' \"$LOG\""
+  check "web: comando confirmado al servidor" "[ \"$WACK\" = 1 ]"
+  check "web: el servidor ve el estado PAUSED" "[ \"$WPAUSED\" = 1 ]"
+  check "web: entradas bloqueadas por PAUSED tras el comando" "grep -P '\tBAR\t' \"$LOG\" | grep -q 'ESTADO PAUSED'"
+  check "web: último comando persistido" "grep -q '^web.last_cmd=1' \"$STATE\""
+fi
 echo "--- últimas decisiones ---"
 grep -P "\tBAR\t" "$LOG" | tail -3 | cut -f7 | cut -c1-300
 exit $status

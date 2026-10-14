@@ -14,3 +14,6 @@ __pycache__/
 .venv/
 # Logs de compilación de MetaEditor
 *.compile.log
+# Dashboard web: base de datos y archivo de entorno con secretos
+*.sqlite3
+*.env

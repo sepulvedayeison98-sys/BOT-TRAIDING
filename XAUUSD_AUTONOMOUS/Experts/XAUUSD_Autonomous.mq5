@@ -16,7 +16,7 @@
 //|  - No promete rentabilidad: validar en backtest y demo.          |
 //+------------------------------------------------------------------+
 #property copyright "XAUUSD Autonomous Trading System"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 #property description "EA autónomo para XAUUSD con gestión estricta de riesgo. Trading real deshabilitado por defecto."
 
@@ -37,6 +37,7 @@
 #include <XAUUSD/NewsManager.mqh>
 #include <XAUUSD/LearningEngine.mqh>
 #include <XAUUSD/Dashboard.mqh>
+#include <XAUUSD/WebDashboard.mqh>
 
 //+------------------------------------------------------------------+
 //| Parámetros                                                       |
@@ -107,6 +108,12 @@ input double         InpRangeAdxMax           = 18.0;
 input double         InpHighVolH1Ratio        = 1.8;
 input double         InpHighVolM15Ratio       = 2.2;
 
+input group "Dashboard web (opcional, ver WebDashboard/README.md)"
+input bool           InpWebEnabled            = false;      // Enviar telemetría y aceptar PAUSE/RESUME/SAFE_MODE
+input string         InpWebUrl                = "";         // https://tu-dominio (añadirla en Opciones > Asesores Expertos > WebRequest)
+input string         InpWebToken              = "";         // Token del dashboard (>= 32 caracteres; NO es la contraseña de la cuenta)
+input int            InpWebIntervalSec        = 30;         // Ciclo de telemetría/comandos (10-600 s)
+
 //+------------------------------------------------------------------+
 //| Módulos y estado                                                 |
 //+------------------------------------------------------------------+
@@ -128,6 +135,7 @@ CNewsManager         g_news;
 CLearningEngine      g_learn;
 CStateStore          g_store;
 CDashboard           g_dash;
+CWebDashboard        g_web;
 
 string               g_symbol = "";
 ENUM_EA_STATE        g_state = EA_INIT;
@@ -275,6 +283,7 @@ void SaveState(void)
    g_store.SetDouble("daily.deposits", g_daily.NetDeposits());
    g_store.SetBool("daily.limit", g_daily.LimitHit());
    g_store.SetDouble("equity.peak", g_peak_equity);
+   g_store.SetLong("web.last_cmd", g_web.LastCommandId());
    string keys[];
    datetime times[];
    int n = g_adaptive.ConsumedKeys(keys, times);
@@ -337,6 +346,7 @@ bool LoadState(string &why)
                        g_store.GetDouble("daily.deposits"), g_store.GetBool("daily.limit")))
       g_log.Info("EA", "DAILY_NOT_RESTORED", "el estado diario guardado es de otro día o no existe");
    g_peak_equity = g_store.GetDouble("equity.peak", 0.0);
+   g_web.SetLastCommandId(g_store.GetLong("web.last_cmd", 0));
    string ck[];
    int n = g_store.KeysWithPrefix("consumed.", ck);
    for(int i = 0; i < n; i++)
@@ -522,6 +532,11 @@ int OnInit()
       !g_news.Init(ncfg, g_tester, &g_log) || !g_learn.Init(InpRunTag, g_symbol, &g_log))
      {
       g_log.Critical("EA", "INIT_FAILED", "configuración inválida en algún módulo (ver registros anteriores)");
+      return INIT_PARAMETERS_INCORRECT;
+     }
+   if(!g_web.Init(InpWebEnabled, InpWebUrl, InpWebToken, InpWebIntervalSec, g_tester, &g_log))
+     {
+      g_log.Critical("EA", "INIT_FAILED", "configuración inválida del dashboard web");
       return INIT_PARAMETERS_INCORRECT;
      }
    g_daily.Configure(InpDailyResetHour, InpDailyLossPct);
@@ -799,6 +814,7 @@ void OnTimer()
    if(g_dirty || now - g_last_save >= 30)
       SaveState();
    UpdateDashboard();
+   WebCycle();
   }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result)
@@ -938,6 +954,122 @@ void UpdateDashboard(void)
    d.last_trade = g_last_trade_text;
    d.blocks = (g_blocks == "") ? "ninguno" : g_blocks;
    g_dash.Update(d, g_state == EA_PAUSED, TimeLocal());
+  }
+
+//+------------------------------------------------------------------+
+//| Dashboard web: telemetría saliente y comandos remotos limitados  |
+//+------------------------------------------------------------------+
+double CurrentExposurePct(int &npos)
+  {
+   PositionInfo pos[];
+   npos = g_gateway.Positions(g_symbol, InpMagic, pos);
+   PositionRisk risks[];
+   CPositionManager::Risks(pos, risks);
+   double exp_money = 0.0;
+   string why;
+   g_risk.ExistingExposure(risks, exp_money, why);
+   double base = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY));
+   return (base > 0.0) ? exp_money / base * 100.0 : 0.0;
+  }
+
+string TelemetryJson(void)
+  {
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   string mode = EnumToString((ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE));
+   StringReplace(mode, "ACCOUNT_TRADE_MODE_", "");
+   int npos = 0;
+   double exposure = CurrentExposurePct(npos);
+   string news = g_news_state.blocked ? "BLOQUEO: " + g_news_state.reason :
+                 (g_news_state.minutes_to_next >= 0 ? StringFormat("libre (próximo: %s en %d min)", g_news_state.next_name, g_news_state.minutes_to_next) : "libre");
+   string j = "{";
+   j += CWebDashboard::JsonStr("version", XAU_PROJECT_VERSION) + ",";
+   j += CWebDashboard::JsonStr("symbol", g_symbol) + ",";
+   j += CWebDashboard::JsonStr("run_tag", InpRunTag) + ",";
+   j += CWebDashboard::JsonStr("account_mode", mode + (g_netting ? " Netting" : " Hedging")) + ",";
+   j += CWebDashboard::JsonStr("currency", AccountInfoString(ACCOUNT_CURRENCY)) + ",";
+   j += CWebDashboard::JsonNum("equity", equity, 2) + ",";
+   j += CWebDashboard::JsonNum("balance", AccountInfoDouble(ACCOUNT_BALANCE), 2) + ",";
+   j += CWebDashboard::JsonStr("state", EnumEAStateToString(g_state)) + ",";
+   j += CWebDashboard::JsonStr("state_reason", g_state_reason) + ",";
+   j += CWebDashboard::JsonNum("daily_loss_pct", g_daily.LossPct(equity), 2) + ",";
+   j += CWebDashboard::JsonNum("daily_limit_pct", InpDailyLossPct, 2) + ",";
+   j += CWebDashboard::JsonNum("daily_gain_pct", g_daily.GainPct(equity), 2) + ",";
+   j += CWebDashboard::JsonNum("exposure_pct", exposure, 2) + ",";
+   j += CWebDashboard::JsonNum("risk_pct", g_risk.EffectiveRiskPct(0), 2) + ",";
+   j += CWebDashboard::JsonNum("positions", npos, 0) + ",";
+   j += CWebDashboard::JsonNum("drawdown_pct", (g_peak_equity > 0) ? (g_peak_equity - equity) / g_peak_equity * 100.0 : 0.0, 2) + ",";
+   j += CWebDashboard::JsonStr("regime", EnumRegimeToString(g_regime_state.regime)) + ",";
+   j += CWebDashboard::JsonStr("session", g_snap_valid ? EnumSessionToString(g_snap.session) : "") + ",";
+   if(g_snap_valid)
+     {
+      j += CWebDashboard::JsonNum("spread", g_snap.spread_points, 1) + ",";
+      j += CWebDashboard::JsonNum("spread_avg", g_snap.spread_avg_points, 1) + ",";
+      j += CWebDashboard::JsonNum("atr_m15", g_snap.m15.atr[0], 2) + ",";
+      j += CWebDashboard::JsonNum("rsi_m15", g_snap.m15.rsi[0], 1) + ",";
+     }
+   j += CWebDashboard::JsonStr("news", news) + ",";
+   j += CWebDashboard::JsonStr("last_signal", g_last_signal_text) + ",";
+   j += CWebDashboard::JsonStr("last_trade", g_last_trade_text) + ",";
+   j += CWebDashboard::JsonStr("blocks", (g_blocks == "") ? "ninguno" : g_blocks);
+   j += "}";
+   return j;
+  }
+
+//--- Solo PAUSE / RESUME / SAFE_MODE (ya verificados por firma, antigüedad e id). Nada remoto
+//--- abre, cierra ni modifica posiciones, ni saca del modo seguro.
+void ApplyWebCommand(const string cmd, const long id)
+  {
+   string tag = "comando web #" + IntegerToString(id) + " " + cmd;
+   if(cmd == "PAUSE")
+     {
+      if(g_state == EA_RUNNING)
+         SetState(EA_PAUSED, "pausa remota desde el dashboard web (la gestión protectora sigue activa)");
+      else
+         g_log.Info("EA", "WEB_COMMAND_IGNORED", tag + ": el estado " + EnumEAStateToString(g_state) + " ya bloquea entradas");
+     }
+   else
+      if(cmd == "RESUME")
+        {
+         if(g_state == EA_PAUSED)
+            SetState(EA_RUNNING, "reanudado desde el dashboard web");
+         else
+            g_log.Info("EA", "WEB_COMMAND_IGNORED", tag + ": solo se reanuda desde PAUSED (estado " + EnumEAStateToString(g_state) + ")");
+        }
+      else
+         if(cmd == "SAFE_MODE")
+            EnterSafeMode("activado remotamente desde el dashboard web");
+   g_log.Warn("EA", "WEB_COMMAND", tag + " -> estado " + EnumEAStateToString(g_state));
+  }
+
+void WebCycle(void)
+  {
+   if(!g_web.Due(TimeGMT()))
+      return;
+   string why;
+   if(!g_web.SendTelemetry(TelemetryJson(), why))
+     {
+      g_log.LogOnChange("web", why, LOG_WARN, "WebDashboard", "UNREACHABLE", "telemetría no enviada: " + why);
+      return;   // sin conexión no se consultan comandos en este ciclo (no bloquear más el hilo)
+     }
+   g_log.LogOnChange("web", "", LOG_INFO, "WebDashboard", "CONNECTED", "telemetría enviada");
+   long ids[];
+   string cmds[];
+   int n = g_web.PollCommands(ids, cmds, why);
+   for(int i = 0; i < n; i++)
+     {
+      ApplyWebCommand(cmds[i], ids[i]);
+      // se registra como aplicado ANTES de confirmar: si la confirmación falla no se re-aplica
+      g_web.SetLastCommandId(ids[i]);
+      g_dirty = true;
+      string ack_why;
+      if(!g_web.Ack(ids[i], ack_why))
+         g_log.Warn("WebDashboard", "ACK_FAILED", "comando #" + IntegerToString(ids[i]) + " aplicado, confirmación pendiente: " + ack_why);
+     }
+   if(n > 0)
+     {
+      SaveState();
+      UpdateDashboard();
+     }
   }
 
 //--- Criterio de optimización: esperanza en R × raíz del número de operaciones, penalizada por el
