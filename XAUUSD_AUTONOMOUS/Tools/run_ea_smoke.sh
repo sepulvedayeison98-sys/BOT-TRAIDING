@@ -13,6 +13,9 @@ export WINEPREFIX="${WINEPREFIX:-/root/.wine-mt5}" WINEDEBUG=-all DISPLAY="${DIS
 MT_DIR="$WINEPREFIX/drive_c/Program Files/MetaTrader 5"
 cd "$PROJECT_DIR" || exit 2
 Tools/compile.sh Experts/XAUUSD_Autonomous.mq5 Tests/StressTests/FeedTicksSmoke.mq5 Tests/Backtesting/CreateSyntheticXAU.mq5 || exit 1
+# SMOKE_RESTART=1: segunda ejecución sobre el estado guardado (prueba de reinicio)
+RESTART="${SMOKE_RESTART:-0}"
+if [ "$RESTART" != "1" ]; then
 # 1) símbolo sintético fresco que termina "ahora" (uno antiguo puede no sincronizar a tiempo)
 mkdir -p "$MT_DIR/MQL5/Scripts/XAUUSD_Tests" "$MT_DIR/MQL5/Presets"
 cp Tests/Backtesting/CreateSyntheticXAU.ex5 "$MT_DIR/MQL5/Scripts/XAUUSD_Tests/"
@@ -25,13 +28,23 @@ pgrep -x Xvfb >/dev/null || (Xvfb "$DISPLAY" -screen 0 1280x900x16 >/dev/null 2>
 timeout 300 wine "$MT_DIR/terminal64.exe" /portable /config:C:\\xau_syn.ini >/dev/null 2>&1
 wineserver -w >/dev/null 2>&1
 echo "símbolo sintético: $(cat "$MT_DIR/MQL5/Files/XAUUSD/reports/CreateSyntheticXAU.txt" 2>/dev/null)"
+fi
 mkdir -p "$MT_DIR/MQL5/Experts/XAUUSD" "$MT_DIR/MQL5/Scripts/XAUUSD_Tests" "$MT_DIR/MQL5/Presets"
 cp Experts/XAUUSD_Autonomous.ex5 "$MT_DIR/MQL5/Experts/XAUUSD/"
 cp Tests/StressTests/FeedTicksSmoke.ex5 "$MT_DIR/MQL5/Scripts/XAUUSD_Tests/"
 printf 'InpAllowAnySymbol=true\r\nInpSymbolOverride=XAUSYN\r\nInpRunTag=smoke\r\nInpShowDashboard=true\r\n' > "$MT_DIR/MQL5/Presets/xau_smoke.set"
 LOGDIR="$MT_DIR/MQL5/Files/XAUUSD/logs"
 STATE="$MT_DIR/MQL5/Files/XAUUSD/state_XAUSYN_26101201.dat"
-rm -f "$LOGDIR"/XAUUSD_Autonomous_*.log "$STATE" "$MT_DIR/MQL5/Files/XAUUSD/reports/FeedTicksSmoke.txt"
+rm -f "$LOGDIR"/XAUUSD_Autonomous_*.log "$MT_DIR/MQL5/Files/XAUUSD/reports/FeedTicksSmoke.txt"
+# SMOKE_STATE_EDIT=pause|corrupt: modifica el estado guardado antes del reinicio
+EDIT="${SMOKE_STATE_EDIT:-}"
+if [ "$RESTART" = "1" ]; then
+  [ -f "$STATE" ] || { echo "FAIL: no hay estado previo para la prueba de reinicio"; exit 1; }
+  if [ "$EDIT" = "pause" ]; then python3 Tools/edit_state.py "$STATE" set ea.state PAUSED; fi
+  if [ "$EDIT" = "corrupt" ]; then python3 Tools/edit_state.py "$STATE" corrupt; fi
+else
+  rm -f "$STATE"
+fi
 printf '[StartUp]\r\nExpert=XAUUSD\\XAUUSD_Autonomous\r\nExpertParameters=xau_smoke.set\r\nSymbol=EURUSD\r\nPeriod=H1\r\nScript=XAUUSD_Tests\\FeedTicksSmoke\r\n' > "$WINEPREFIX/drive_c/xau_smoke.ini"
 find "$MT_DIR/MQL5/Profiles/Charts/Default/" -name "chart*.chr" ! -name "chart01.chr" -delete 2>/dev/null
 pgrep -x Xvfb >/dev/null || (Xvfb "$DISPLAY" -screen 0 1280x900x16 >/dev/null 2>&1 &)
@@ -51,7 +64,19 @@ check "pipeline ejecutado en >= 50 velas M5" "[ $(c BAR) -ge 50 ]"
 check "sin órdenes enviadas (sin cuenta)" "[ $(c EXECUTED) -eq 0 ]"
 check "cierre ordenado (STOP en OnDeinit)" "[ $(c STOP) -ge 1 ]"
 check "estado persistido con checksum" "grep -q '^#checksum=' \"$STATE\""
-check "sin errores críticos" "[ $(grep -c $'\tCRITICAL\t' "$LOG") -eq 0 ]"
+if [ "$RESTART" = "1" ]; then
+  if [ "$EDIT" = "corrupt" ]; then
+    check "reinicio con estado alterado: detectado como corrupto" "grep -q 'estado persistente corrupto' \"$LOG\""
+    check "reinicio con estado alterado: modo seguro (entradas bloqueadas)" "grep -P '\tBAR\t' \"$LOG\" | grep -q 'ESTADO SAFE_MODE'"
+  else
+    check "reinicio: estado previo válido (sin modo seguro)" "! grep -q 'estado persistente corrupto' \"$LOG\""
+  fi
+  if [ "$EDIT" = "pause" ]; then
+    check "reinicio: pausa restaurada" "grep -q 'restaurado: entradas pausadas' \"$LOG\""
+    check "reinicio: entradas bloqueadas por PAUSED" "grep -P '\tBAR\t' \"$LOG\" | grep -q 'ESTADO PAUSED'"
+  fi
+fi
+[ "$EDIT" = "corrupt" ] || check "sin errores críticos" "[ $(grep -c $'\tCRITICAL\t' "$LOG") -eq 0 ]"
 echo "--- últimas decisiones ---"
 grep -P "\tBAR\t" "$LOG" | tail -3 | cut -f7 | cut -c1-300
 exit $status

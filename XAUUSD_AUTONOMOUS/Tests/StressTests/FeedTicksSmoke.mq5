@@ -63,9 +63,12 @@ void OnStart()
         }
       filled = CustomRatesUpdate(InpSymbol, r);
      }
-   //--- 2) ticks acelerados desde ahora
+   //--- 2) ticks acelerados desde ahora (o desde el último tick existente, si es posterior)
    int added = 0;
    datetime t = now_min + 1;
+   MqlTick lt;
+   if(SymbolInfoTick(InpSymbol, lt) && lt.time >= t)
+      t = lt.time + 1;
    for(int i = 0; i < InpTicks && !IsStopped(); i++)
      {
       MqlTick tk[1];

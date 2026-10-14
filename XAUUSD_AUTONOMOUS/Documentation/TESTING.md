@@ -127,6 +127,11 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 - **Prueba de humo** (`Tools/run_ea_smoke.sh`): el EA se carga en el terminal (sin cuenta) operando el símbolo sintético `XAUSYN`; `FeedTicksSmoke` inyecta 3.000 ticks acelerados (8 h simuladas) y cierra el terminal. Resultado: **7/7 verificaciones** — `OnInit` completo, 54 velas M5 procesadas por el pipeline completo (régimen → estrategias → coordinador → gates), 6 cambios de régimen, **0 órdenes** (gate de conexión cerrado, como corresponde), estado persistido con checksum, cierre ordenado (`OnDeinit`), 0 errores críticos. Cada vela deja en el log régimen, motivo, señales, decisión y bloqueos.
 - **Fallo seguro observado** (antes de ajustar el entorno de prueba): sin conexión, el EA se negó a arrancar porque el valor de tick era 0 (`SPEC_INVALID`), tanto en EURUSD como en el símbolo sintético.
 
+- **Pruebas de reinicio** (`SMOKE_RESTART=1`, el estado se edita con `Tools/edit_state.py`):
+  - estado con `ea.state=PAUSED` y suma recalculada → **10/10**: pausa restaurada, entradas bloqueadas por `PAUSED` en las 54 velas, sin errores críticos (verifica además que la suma FNV-1a de Python y MQL5 coincide);
+  - estado alterado sin recalcular la suma → **10/10**: detectado como corrupto, **modo seguro** con entradas bloqueadas, cierre ordenado.
+  - Sin cuenta el balance es 0, por lo que la base de pérdida diaria no puede verificarse aquí (el EA la descarta y reconstruye, como corresponde); queda para la demo (§8, prueba 8).
+
 **Hallazgos de la integración:**
 - El terminal desconectado no inicializa un EA en el gráfico de un símbolo personalizado ("symbol synchronization timeout"); la prueba usa el parámetro **solo de pruebas** `InpSymbolOverride` (exige `InpAllowAnySymbol=true`).
 - La definición de un símbolo personalizado solo se guarda si el terminal se cierra de forma ordenada (`TerminalClose`).

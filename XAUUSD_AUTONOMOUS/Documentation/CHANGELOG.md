@@ -4,7 +4,7 @@
 ### Añadido
 - `Experts/XAUUSD_Autonomous.mq5`: EA integrado (pipeline, gates, estados, persistencia, reconciliación, diario, panel, OnTester).
 - `Dashboard.mqh` (panel con doble confirmación) y `Test_Phase10.mq5` (22/22).
-- `Tests/StressTests/FeedTicksSmoke.mq5` y `Tools/run_ea_smoke.sh` (prueba de humo del EA: 7/7).
+- `Tests/StressTests/FeedTicksSmoke.mq5` y `Tools/run_ea_smoke.sh` (prueba de humo del EA: 7/7; reinicio con pausa 10/10; reinicio con estado corrupto 10/10) y `Tools/edit_state.py`.
 - `Documentation/WEB_DASHBOARD.md` (diseño del dashboard web; no implementado).
 - `CTradeGateway::PositionAlive`, respaldo de tick value con advertencia, `InpSymbolOverride` (solo pruebas).
 
