@@ -51,7 +51,7 @@ El servidor rechaza (401) firmas inválidas, timestamps con más de 120 s de dif
 ## 5. Verificación realizada (entorno de desarrollo)
 - `WebDashboard/tests/test_server.py`: 24 pruebas (firma, cuerpo alterado, repetición, timestamp viejo, JSON inválido, tamaño, sesión alterada/caducada, CSRF, comandos no permitidos, flujo completo de comando, caducidad, recorrido de rutas, conexión persistente, IP detrás del proxy, agregación de la serie).
 - Vectores HMAC idénticos en Python y MQL5 (RFC 4231 caso 2, firma de petición, firma de comando y clave de más de 64 bytes) en `Test_WebDashboard.mq5` y `test_server.py`.
-- Extremo a extremo con MT5 real bajo Wine (`Tools/run_web_e2e.sh`): el script MQL5 envía telemetría UTF-8 firmada, recibe, verifica y confirma un `PAUSE` → 28/28.
+- Extremo a extremo con MT5 real bajo Wine (`Tools/run_web_e2e.sh`): el script MQL5 envía telemetría UTF-8 firmada, recibe, verifica y confirma un `PAUSE` → 34/34 (incluye las 28 pruebas unitarias del cliente).
 - EA completo + servidor (`SMOKE_WEB=1 Tools/run_ea_smoke.sh`): 8 envíos de telemetría, `PAUSE` aplicado, confirmado, visible en el servidor, entradas bloqueadas por `PAUSED` y `web.last_cmd=1` persistido.
 - Interfaz revisada en Chromium (claro, oscuro, 390 px de ancho): sin errores de consola ni desplazamiento horizontal.
 

@@ -141,7 +141,7 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 ### Dashboard web (1.1.0)
 - `Test_WebDashboard.mq5` → **28 passed, 0 failed**: HMAC-SHA256 con 4 vectores fijos idénticos a Python (incluido RFC 4231 caso 2 y clave > 64 bytes), escape JSON y UTF-8, verificación de comandos (válido, repetido, viejo, alterado, otro token, `CLOSE_ALL` firmado → rechazado, mal formado), validación de configuración (https obligatorio salvo localhost, token ≥ 32, desactivado en el tester), nonces, intervalo y backoff.
 - `WebDashboard/tests/test_server.py` → **24 tests OK**.
-- **Extremo a extremo** (`Tools/run_web_e2e.sh`, MT5 bajo Wine ↔ servidor real en 127.0.0.1) → **28/28**: telemetría firmada aceptada (texto con comillas y "ñ" intacto), comando `PAUSE` recibido, verificado y confirmado, sin repetición tras confirmar.
+- **Extremo a extremo** (`Tools/run_web_e2e.sh`, MT5 bajo Wine ↔ servidor real en 127.0.0.1) → **34/34**: telemetría firmada aceptada (texto con comillas y "ñ" intacto), comando `PAUSE` recibido, verificado y confirmado, sin repetición tras confirmar.
 - **EA completo + servidor** (`SMOKE_WEB=1 Tools/run_ea_smoke.sh`) → **15/15**: 8 envíos de telemetría con el símbolo correcto, `PAUSE` aplicado y confirmado, el servidor ve `PAUSED`, las velas siguientes quedan bloqueadas por `ESTADO PAUSED`, `web.last_cmd=1` persistido.
 - Interfaz revisada en Chromium (claro, oscuro, 390 px): sin errores de consola ni desplazamiento horizontal; tooltip y crosshair del gráfico funcionando.
 

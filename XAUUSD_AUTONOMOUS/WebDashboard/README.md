@@ -2,6 +2,19 @@
 
 Servidor en Python 3.8+ **sin dependencias externas** (`http.server` + `sqlite3`) y una página estática. El EA le envía telemetría firmada y recoge, como máximo, tres comandos: **PAUSE**, **RESUME** y **SAFE_MODE**. Desde la web no se puede abrir, cerrar ni modificar operaciones, cambiar el riesgo ni salir del modo seguro (eso queda solo en el panel de MT5). Diseño y seguridad: [Documentation/WEB_DASHBOARD.md](../Documentation/WEB_DASHBOARD.md).
 
+## 0. Opción rápida: en el mismo PC con Windows donde corre MT5
+Solo visible desde ese PC (no desde el celular); no necesita dominio ni certificado.
+1. Instala Python 3.8+ desde https://www.python.org/downloads/ marcando **"Add python.exe to PATH"**.
+2. Doble clic en **`WebDashboard\iniciar_dashboard.bat`**.
+   - La primera vez te pide la contraseña para entrar a la web (≥ 12 caracteres) y guarda el token, el secreto y el hash en `%USERPROFILE%\.xad\xad.env` (fuera del repositorio).
+   - Muestra los valores para el EA (el token queda copiado en el portapapeles), arranca el servidor en `http://127.0.0.1:8080` y abre el navegador.
+3. En MT5: añade `http://127.0.0.1:8080` en *Opciones → Asesores Expertos → WebRequest* y pon en el EA `InpWebEnabled=true`, `InpWebUrl=http://127.0.0.1:8080`, `InpWebToken=<token>`.
+4. Deja abierta la ventana del servidor; `Ctrl+C` lo detiene. Para cambiar las claves: `powershell -ExecutionPolicy Bypass -File iniciar_dashboard.ps1 -Reset` (y actualiza `InpWebToken`). Otro puerto: `-Port 8081`.
+
+> El lanzador se probó con PowerShell 7 en Linux (primera configuración, arranque, acceso con contraseña); no se ha ejecutado en un Windows real. Si algo falla, el mensaje de error de esa ventana indica la causa.
+
+Para verlo desde cualquier lugar (celular incluido), sigue los pasos 1–4 con un servidor propio.
+
 ## 1. Requisitos
 - Un servidor Linux con Python 3.8+ y un **dominio con HTTPS** (el EA solo acepta `https://`, salvo `http://127.0.0.1` / `http://localhost` para pruebas en la misma máquina).
 - Un proxy con TLS delante (el ejemplo usa Caddy, que obtiene el certificado automáticamente). El servidor Python escucha **solo en 127.0.0.1**.
