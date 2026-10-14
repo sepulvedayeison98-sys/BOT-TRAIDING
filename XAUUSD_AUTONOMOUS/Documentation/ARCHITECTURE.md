@@ -408,7 +408,9 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 12. **`TimeCurrent()` no es "ahora"**: devuelve la hora del último tick conocido (en fin de semana o sin conexión puede ser de días antes; en la Fase 2 se observó 2024-08-23 con el terminal desconectado). Para la hora actual del servidor se usa `TimeTradeServer()`.
 13. **El Strategy Tester exige una cuenta**: aunque el símbolo sea personalizado, el tester no arranca si el terminal no tiene una cuenta configurada (observado en Fase 3). Las pruebas en tester se ejecutan en tu terminal.
 14. **Símbolos personalizados (solo pruebas)**: `CustomTicksAdd` reescribe la vela que contiene el tick como vela plana. Las pruebas que comparan series lo evitan.
-15. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
+15. **EA en símbolo personalizado sin conexión**: el terminal no inicializa el EA ("symbol synchronization timeout"). Solo afecta a las pruebas en el entorno de desarrollo.
+16. **`SYMBOL_TRADE_TICK_VALUE_LOSS` = 0** cuando no hay conversión disponible: respaldo a `SYMBOL_TRADE_TICK_VALUE` con advertencia.
+17. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
 
 ---
 
@@ -461,6 +463,14 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 - **MT5 (Fase 10):** objetos de gráfico (`OBJ_LABEL`, `OBJ_BUTTON`, `OBJ_RECTANGLE_LABEL`) actualizados en `OnTimer` (no en cada tick). Botones: pausar/reanudar entradas, modo seguro, cerrar todas (**doble clic de confirmación en < 5 s**, no `MessageBox`, que bloquea el hilo), abrir carpeta de logs (mostrar ruta).
 - **Web (diseño posterior):** el EA solo hace **salida** HTTPS (`WebRequest`) hacia un backend propio con telemetría firmada (HMAC con token de dashboard, nunca credenciales de trading). Comandos remotos limitados a *pausa* y *modo seguro* (nunca abrir operaciones), recogidos por *polling* y firmados. Requiere: servidor HTTPS propio, URL en lista blanca del terminal, token almacenado fuera del repositorio. No se construirá ninguna conexión ficticia.
 
+## 15b. EA integrado (Fase 11)
+- `OnInit`: símbolo (exclusivo XAUUSD salvo `InpAllowAnySymbol`), especificación, cuenta (demo / real con doble confirmación, Hedging/Netting), configuración de todos los módulos con límites duros, modelo Champion (sin riesgo), estado persistente (corrupto → modo seguro), base diaria (restaurada o reconstruida desde el historial), reconciliación de la solicitud pendiente, adopción de posiciones (sin SL → modo seguro), panel.
+- `OnTick` y `OnTimer` → gestión protectora (con límite de frecuencia) + vela M5 nueva → pipeline.
+- `OnTimer` (1 s): reloj, noticias, pérdida diaria y reset, reconciliación, cambio de especificación (→ modo seguro), guardado periódico, panel.
+- `OnTradeTransaction`: depósitos/retiros (excluidos de la pérdida diaria), confirmación de entradas, cierres → diario.
+- `OnDeinit`: guarda estado y reporte; **no cierra posiciones**.
+- `OnTester`: esperanza en R × √n − 0.1 × drawdown en R (0 con menos de 30 operaciones).
+
 ## 16. Dependencias externas
 
 | Dependencia | Obligatoria | Notas |
@@ -487,7 +497,7 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 | 8 | `NewsManager` + exportador de calendario | Tests de ventanas |
 | 9 | `LearningEngine` + `Tools/` Challenger | Validación independiente |
 | 10 | `Dashboard` | — |
-| 11 | Integración en `XAUUSD_Autonomous.mq5` | Compilación completa |
+| 11 | Integración en `XAUUSD_Autonomous.mq5` | Compilación completa — **hecho** |
 | 12 | Validación (TESTING.md) | Criterios de aceptación |
 | 13 | Demo | Comparación demo vs backtest |
 

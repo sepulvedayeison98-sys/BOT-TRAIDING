@@ -36,6 +36,11 @@ string SyntheticSymbolCreate(const string name, const int minutes, TSynthPriceFu
    CustomSymbolSetInteger(name, SYMBOL_DIGITS, 2);
    CustomSymbolSetDouble(name, SYMBOL_POINT, 0.01);
    CustomSymbolSetDouble(name, SYMBOL_TRADE_TICK_SIZE, 0.01);
+   CustomSymbolSetDouble(name, SYMBOL_TRADE_TICK_VALUE, 1.0);        // tipo oro: 0.01 = 1 USD por lote
+   CustomSymbolSetDouble(name, SYMBOL_TRADE_CONTRACT_SIZE, 100.0);
+   CustomSymbolSetDouble(name, SYMBOL_VOLUME_MIN, 0.01);
+   CustomSymbolSetDouble(name, SYMBOL_VOLUME_MAX, 50.0);
+   CustomSymbolSetDouble(name, SYMBOL_VOLUME_STEP, 0.01);
 
    datetime now = TimeTradeServer();
    datetime end = now - (now % 60);

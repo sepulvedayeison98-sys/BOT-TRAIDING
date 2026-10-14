@@ -1,6 +1,6 @@
 # Plan de pruebas y validación
 
-> Estado: **Fase 9 completada**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
+> Estado: **Fases 1–11 completadas; Fase 12 ejecutada en lo posible sin cuenta**. Resultados registrados en §7. Batería completa: `Tools/run_all_tests.sh`.
 
 ## 1. Niveles de prueba
 
@@ -118,3 +118,36 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 ### Fase 9 — 2026-10-12
 - `Test_Phase9.mq5` → **41 passed, 0 failed**: SHA-256 de MQL5 idéntico al de Python (respuesta conocida), modelo aprobado se carga y aplica, sin modelo → valores por defecto, alterado → rechazado, sin aprobación → rechazado, clave de riesgo o de ejecución → rechazado entero, valor inválido → no se aplica nada, métricas calculadas a mano, filtros, diario CSV (cabecera = la de challenger.py, fila, R, contexto, huérfanas), persistencia del contexto de entrada, reporte.
 - `Tools/tests/test_challenger.py` → **16 tests OK** (23 en total con las de regime_report): métricas a mano, Challenger mejor → recomendado, sobreajustado → rechazado, muestra pequeña → rechazado, mejora no significativa → rechazado, lista blanca igual a la del EA, sin claves de riesgo, hash del modelo, clave prohibida, `approve` exige `--i-approve`, fechas de walk-forward, archivos .ini/.set.
+
+### Fase 10 — Dashboard
+`Test_Phase10.mq5` → **22 passed, 0 failed**: objetos creados en el gráfico, textos actualizados (estado, régimen, noticias), botón de pausa refleja el estado, comandos, **doble confirmación** de "cerrar todo" y "salir de modo seguro" (armado, confirmación en ≤ 5 s, caducidad), objetos ajenos ignorados, limpieza.
+
+### Fase 11 — EA integrado (`Experts/XAUUSD_Autonomous.mq5`)
+- Compilación: **0 errores, 0 warnings**.
+- **Prueba de humo** (`Tools/run_ea_smoke.sh`): el EA se carga en el terminal (sin cuenta) operando el símbolo sintético `XAUSYN`; `FeedTicksSmoke` inyecta 3.000 ticks acelerados (8 h simuladas) y cierra el terminal. Resultado: **7/7 verificaciones** — `OnInit` completo, 54 velas M5 procesadas por el pipeline completo (régimen → estrategias → coordinador → gates), 6 cambios de régimen, **0 órdenes** (gate de conexión cerrado, como corresponde), estado persistido con checksum, cierre ordenado (`OnDeinit`), 0 errores críticos. Cada vela deja en el log régimen, motivo, señales, decisión y bloqueos.
+- **Fallo seguro observado** (antes de ajustar el entorno de prueba): sin conexión, el EA se negó a arrancar porque el valor de tick era 0 (`SPEC_INVALID`), tanto en EURUSD como en el símbolo sintético.
+
+**Hallazgos de la integración:**
+- El terminal desconectado no inicializa un EA en el gráfico de un símbolo personalizado ("symbol synchronization timeout"); la prueba usa el parámetro **solo de pruebas** `InpSymbolOverride` (exige `InpAllowAnySymbol=true`).
+- La definición de un símbolo personalizado solo se guarda si el terminal se cierra de forma ordenada (`TerminalClose`).
+- `SYMBOL_TRADE_TICK_VALUE_LOSS` puede ser 0 cuando no hay conversión de divisa disponible: se usa `SYMBOL_TRADE_TICK_VALUE` con advertencia en el log (el riesgo se verifica además contra `OrderCalcProfit`).
+- Mejora de robustez: el temporizador (1 s) también ejecuta la gestión protectora y la detección de vela nueva, para que la protección no dependa de que lleguen ticks al gráfico.
+
+## 8. Lo que falta validar (requiere tu terminal y cuenta demo)
+
+| # | Prueba (Fase 12–13) | Cómo | Criterio |
+|---|---|---|---|
+| 1 | Compilación en tu MetaEditor | F7 en cada `.mq5` | 0 errores |
+| 2 | Especificaciones reales | `SymbolSpecDump` | revisar contrato, tick value, lotes, Hedging/Netting, offset |
+| 3 | Calendario | `ExportCalendar` en vivo; comprobar 1 evento conocido (p. ej. NFP) en el CSV con su hora | hora correcta en hora del servidor |
+| 4 | Régimen | `RegimeLogger` 12+ meses + `regime_report.py`, dentro y fuera de muestra | veredictos de la sección Fase 3 |
+| 5 | Backtest del EA | tester, ticks reales, comisión y spread reales, CSV de noticias | ≥ 100 operaciones OOS antes de concluir nada |
+| 6 | Walk-forward | `challenger.py folds` + `compare` | criterios de promoción (ARCHITECTURE.md §14) |
+| 7 | Spread y slippage | repetir backtest con spread fijo ×1.5 y ×2 y delay aleatorio | el resultado no debe depender de costos optimistas |
+| 8 | Reinicio | en demo, quitar y volver a poner el EA con posiciones abiertas | sin duplicados; metadatos y diario recuperados |
+| 9 | Desconexión | en demo, cortar la red 2–3 min con una posición abierta | SL/TP siguen en el servidor; el EA no envía duplicados al volver |
+| 10 | Límites de riesgo | en demo con `InpDailyLossPct` bajo (p. ej. 1 %) | bloqueo diario, gestión protectora activa |
+| 11 | Hedging/Netting | si Deriv ofrece ambos tipos de cuenta demo | Netting: máximo 1 posición, sin promediar |
+| 12 | Demo prolongada | varias semanas (distintos regímenes) | comparar ejecución real (slippage, spread, rechazos) con el backtest |
+
+Nada de lo anterior está hecho todavía; ningún resultado aquí es una métrica de rendimiento.

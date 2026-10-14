@@ -14,6 +14,7 @@
 input string InpName = "XAUSYN";
 input int    InpDays = 120;
 input int    InpSeed = 42;
+input bool   InpCloseTerminal = false;   // cerrar el terminal al terminar (automatización: guarda el símbolo)
 
 double g_prices[];
 
@@ -66,4 +67,7 @@ void OnStart()
       FileWriteString(h, (err == "" ? "OK " : "ERROR ") + err + "\r\n");
       FileClose(h);
      }
+   // la definición del símbolo personalizado se guarda al cerrar el terminal de forma ordenada
+   if(InpCloseTerminal)
+      TerminalClose(0);
   }

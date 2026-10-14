@@ -17,6 +17,8 @@ TIMEOUT_SEC="${TEST_TIMEOUT_SEC:-180}"
 "$PROJECT_DIR/Tools/compile.sh" "$@" || { echo "Compilación fallida: no se ejecutan pruebas"; exit 1; }
 mkdir -p "$SCRIPTS"
 
+# cada ejecución abre un gráfico nuevo en el perfil: se limpian para que el terminal arranque rápido
+find "$MT_DIR/MQL5/Profiles/Charts/Default/" -name "chart*.chr" ! -name "chart01.chr" -delete 2>/dev/null
 status=0
 for src in "$@"; do
   name="$(basename "${src%.mq5}")"

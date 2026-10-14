@@ -78,6 +78,13 @@ bool SymbolSpecLoad(const string symbol, SymbolSpec &s, string &reason)
    s.point = SymbolInfoDouble(symbol, SYMBOL_POINT);
    s.tick_size = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
    s.tick_value_loss = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE_LOSS);
+   s.tick_value_generic = false;
+   if(s.tick_value_loss <= 0.0)
+     {
+      // respaldo: solo difieren por conversión de divisa; el riesgo se verifica además contra OrderCalcProfit
+      s.tick_value_loss = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
+      s.tick_value_generic = (s.tick_value_loss > 0.0);
+     }
    s.contract_size = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
    s.volume_min = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
    s.volume_max = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);

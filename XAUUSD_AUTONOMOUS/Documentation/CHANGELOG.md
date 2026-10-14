@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0] - 2026-10-14 — Fases 10–11: panel e integración
+### Añadido
+- `Experts/XAUUSD_Autonomous.mq5`: EA integrado (pipeline, gates, estados, persistencia, reconciliación, diario, panel, OnTester).
+- `Dashboard.mqh` (panel con doble confirmación) y `Test_Phase10.mq5` (22/22).
+- `Tests/StressTests/FeedTicksSmoke.mq5` y `Tools/run_ea_smoke.sh` (prueba de humo del EA: 7/7).
+- `Documentation/WEB_DASHBOARD.md` (diseño del dashboard web; no implementado).
+- `CTradeGateway::PositionAlive`, respaldo de tick value con advertencia, `InpSymbolOverride` (solo pruebas).
+
+### Cambiado
+- `CreateSyntheticXAU` puede cerrar el terminal (persistencia del símbolo); el helper sintético define tick value, contrato y lotes.
+- `run_tests.sh` limpia los gráficos acumulados en el perfil del terminal.
+- INSTALLATION.md, TESTING.md, ARCHITECTURE.md y README actualizados.
+
 ## [0.9.0] - 2026-10-12 — Fase 9: aprendizaje controlado
 ### Añadido
 - `LearningEngine.mqh` (Champion): diario de operaciones, métricas, carga verificada del modelo con lista blanca.

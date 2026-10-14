@@ -8,7 +8,7 @@
 #define XAUUSD_TYPES_MQH
 
 #define XAU_PROJECT_NAME    "XAUUSD_Autonomous"
-#define XAU_PROJECT_VERSION "0.9.0"
+#define XAU_PROJECT_VERSION "1.0.0"
 #define XAU_FILES_ROOT      "XAUUSD"
 
 //--- Estado global del EA
@@ -302,6 +302,7 @@ struct SymbolSpec
    double            volume_limit;    // 0 = sin límite
    int               stops_level;     // puntos
    int               freeze_level;    // puntos
+   bool              tick_value_generic; // SYMBOL_TRADE_TICK_VALUE_LOSS no disponible: se usó SYMBOL_TRADE_TICK_VALUE
   };
 
 //--- Resultado del RiskManager
