@@ -10,6 +10,7 @@
 - Dashboard web con **varias instancias**: selector de instancia, telemetría por símbolo, comandos a una instancia o a todas con confirmación por instancia (`?i=<símbolo>` dentro de la ruta firmada), destino e "Aplicado N de M" en el historial. El servidor migra la base de 1.1.x y acepta EA 1.1.x.
 - Modelo Champion por símbolo para los sintéticos (`XAUUSD/champion_<símbolo>.model`); XAUUSD mantiene `champion.model`.
 - `Documentation/SYNTHETIC_INDICES.md`; `Test_Instruments.mq5`; `SMOKE_PROFILE=synth` en `run_ea_smoke.sh`.
+- `Tools/regime_calibrate.py`: tiempo en la zona neutral de ADX y persistencia de tendencia por quintil de ADX. Propone un umbral solo con evidencia. El instalador de Windows ahora copia y compila `RegimeLogger`.
 
 ### Cambiado
 - Panel, telemetría y dashboard: perfil, "24/7", noticias "no aplica", spread máximo vigente, posiciones de la cartera, lotes y precios con los decimales del símbolo.

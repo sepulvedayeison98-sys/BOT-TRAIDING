@@ -1,7 +1,7 @@
 ﻿# instalar_windows.ps1 - instala el EA en tu MetaTrader 5 (Windows) y arranca el dashboard web.
 #
 #  1. Busca la carpeta de datos de MT5 (%APPDATA%\MetaQuotes\Terminal\<id>), prefiriendo la de Deriv.
-#  2. Copia Include\XAUUSD, el EA y los scripts SymbolSpecDump / ExportCalendar
+#  2. Copia Include\XAUUSD, el EA, RegimeLogger (validacion, no opera) y los scripts SymbolSpecDump / ExportCalendar
 #     (si ya existia una version anterior, la guarda como copia de seguridad).
 #  3. Compila con MetaEditor y muestra el resultado (debe ser 0 errores).
 #  4. Arranca el dashboard web (iniciar_dashboard.ps1).
@@ -62,6 +62,7 @@ Step "Copiando el EA y sus modulos"
 $copies = @(
     @{ Src = 'Include\XAUUSD';                           Dst = 'Include\XAUUSD';                       Dir = $true },
     @{ Src = 'Experts\XAUUSD_Autonomous.mq5';            Dst = 'Experts\XAUUSD\XAUUSD_Autonomous.mq5'; Dir = $false },
+    @{ Src = 'Tests\Backtesting\RegimeLogger.mq5';       Dst = 'Experts\XAUUSD\RegimeLogger.mq5';      Dir = $false },
     @{ Src = 'Tests\Validation\SymbolSpecDump.mq5';      Dst = 'Scripts\XAUUSD\SymbolSpecDump.mq5';    Dir = $false },
     @{ Src = 'Tests\Backtesting\ExportCalendar.mq5';     Dst = 'Scripts\XAUUSD\ExportCalendar.mq5';    Dir = $false }
 )
@@ -87,7 +88,7 @@ if (-not (Test-Path $editor)) {
     Write-Host "No encontre MetaEditor64.exe en $($sel.Install). Compila a mano: IDE (F4) > Experts\XAUUSD\XAUUSD_Autonomous.mq5 > F7." -ForegroundColor Yellow
     $compiled = $false
 } else {
-    foreach ($rel in @('Experts\XAUUSD\XAUUSD_Autonomous.mq5', 'Scripts\XAUUSD\SymbolSpecDump.mq5', 'Scripts\XAUUSD\ExportCalendar.mq5')) {
+    foreach ($rel in @('Experts\XAUUSD\XAUUSD_Autonomous.mq5', 'Experts\XAUUSD\RegimeLogger.mq5', 'Scripts\XAUUSD\SymbolSpecDump.mq5', 'Scripts\XAUUSD\ExportCalendar.mq5')) {
         $file = Join-Path $mql5 $rel
         $log = Join-Path $env:TEMP ("xad_compile_{0}.log" -f [IO.Path]::GetFileNameWithoutExtension($file))
         Remove-Item -Path $log -ErrorAction SilentlyContinue

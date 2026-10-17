@@ -94,11 +94,28 @@ Implicaciones:
 - **Cada cambio de temporalidad del gráfico reinicia el EA** (`STOP reason=3` → `START`). Es el comportamiento normal de MT5; el estado se guarda y se restaura.
 - **Los umbrales de régimen** (ADX 18/22, ratios de ATR) son los del oro. Hay que medir con `RegimeLogger` + `regime_report.py` en V75 cuánto tiempo pasa en la zona neutral antes de cambiarlos.
 
+### Calibrar el régimen en un sintético
+1. El instalador copia y compila `Experts\XAUUSD\RegimeLogger` (EA de validación, **no opera**).
+2. Strategy Tester (`Ctrl+R`):
+   - Experto `XAUUSD\RegimeLogger`, símbolo **Volatility 75 Index**, temporalidad **M5**.
+   - Modelo "OHLC en M1", fechas: los últimos 6 meses (o lo que tenga el historial del bróker).
+   - Parámetros por defecto (ADX 22/18). Iniciar.
+3. El CSV queda en la carpeta común: `%APPDATA%\MetaQuotes\Terminal\Common\Files\XAUUSD\regime_Volatility 75 Index_<fecha>.csv`.
+4. En el PC:
+   ```
+   python XAUUSD_AUTONOMOUS\Tools\regime_calibrate.py "<ruta del CSV>" --out calibracion_v75.md
+   python XAUUSD_AUTONOMOUS\Tools\regime_report.py "<ruta del CSV>" --out regimen_v75.md
+   ```
+   - `regime_calibrate.py` mide el tiempo en la zona neutral y si hay persistencia de tendencia por quintil de ADX.
+   - Solo propone un umbral nuevo si hay evidencia (t ≥ 2 en todos los horizontes).
+   - Sin evidencia recomienda no tocarlo: en un índice que se comporta como caminata aleatoria, bajar el umbral solo añade operaciones sin ventaja.
+
 ## 6. Verificación realizada (entorno de desarrollo, sin cuenta Deriv)
 - `Test_Instruments.mq5`: 44/44 (detección por nombre, protecciones, lado del spike, límites relativos al ATR, nombres de archivo).
 - `Test_Phase6.mq5`: 112/112, con 9 pruebas de cartera compartida (exposición, posiciones y peor caso del día con riesgo en otros símbolos).
 - `Test_WebDashboard.mq5`: 33/33. E2E con MT5 real: 39/39, con la instancia "Volatility 75 (1s) Index" en la ruta firmada.
 - `WebDashboard/tests`: 29 (instancias, comandos dirigidos, confirmación por instancia, firma de la consulta, migración desde 1.1.x).
+- `Tools/tests/test_regime_calibrate.py`: caminata aleatoria → no propone umbral; persistencia desde ADX 30 → la detecta (≈ 30) y no propone umbrales donde no la hay.
 - Prueba de humo del EA con el perfil sintético forzado sobre un símbolo personalizado (`SMOKE_PROFILE=synth Tools/run_ea_smoke.sh`).
 
 **No verificado:** símbolos reales de Deriv (especificación, spread y ATR típicos), backtest y demo en sintéticos. Los umbrales en fracción de ATR son hipótesis.
