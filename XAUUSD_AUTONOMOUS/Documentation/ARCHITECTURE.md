@@ -11,13 +11,13 @@
 |---|---|---|
 | Repositorio | Vacío (sin commits previos) | No hay código existente que preservar. |
 | Sistema operativo del entorno de desarrollo | Linux (contenedor en la nube) | MetaTrader 5 / MetaEditor son aplicaciones Windows. |
-| MetaTrader 5 / MetaEditor | **No instalados** | **No se puede compilar MQL5 aquí.** Ningún módulo se declarará "compilado" sin compilación real. |
-| Wine | No instalado | Opción a evaluar en Fase 2: instalar Wine + MetaEditor para `metaeditor64.exe /compile`. No verificado que funcione en este contenedor. |
+| MetaTrader 5 / MetaEditor | No venían instalados. **Actualización Fase 2:** instalados bajo Wine 9.0 (MT5 build 6257) con `Tools/setup_wine_mt5.sh` | **Se puede compilar y ejecutar scripts de prueba aquí** (`Tools/compile.sh`, `Tools/run_tests.sh`). El terminal no se conecta a ninguna cuenta. |
+| Wine | Instalado en Fase 2 (Wine 9.0) | MT5 avisa que Wine 9.0 no está soportado oficialmente (recomienda >= 10). Compilación y pruebas funcionaron; la referencia final sigue siendo tu MetaEditor en Windows. |
 | Python | 3.13 disponible | Útil para análisis offline (LearningEngine/Challenger, reportes). El paquete `MetaTrader5` de Python solo funciona en Windows, según mi conocimiento — verificar. |
-| Red saliente | Disponible (mql5.com responde) | Permite descargar documentación/instaladores si se decide usar Wine. |
-| Cuenta Deriv | No accesible desde aquí | Las especificaciones reales de XAUUSD deben leerse en el terminal (ver §9). |
+| Red saliente | Disponible | Permitió descargar el instalador oficial de MT5. |
+| Cuenta Deriv | No accesible desde aquí | Las especificaciones reales de XAUUSD deben leerse en tu terminal con `SymbolSpecDump` (ver §9). |
 
-**Conclusión:** el desarrollo de código MQL5 se hará aquí, pero **la compilación y las pruebas reales deben ejecutarse en tu MetaEditor/MT5 en Windows** (o en Wine si logramos instalarlo). Cada fase entregará un checklist de compilación para que lo ejecutes y me devuelvas los errores.
+**Conclusión:** el código se compila y se prueba aquí con datos sintéticos (símbolos personalizados). Las pruebas con datos reales de Deriv (historial, spread, calendario) solo pueden hacerse en tu terminal.
 
 ---
 
@@ -41,26 +41,34 @@ XAUUSD_AUTONOMOUS/
 ├── Experts/XAUUSD_Autonomous.mq5      # Orquestador: eventos, ciclo, wiring
 ├── Include/XAUUSD/
 │   ├── Types.mqh            (*) enums, structs y constantes compartidas
+│   ├── InstrumentProfile.mqh perfil por instrumento: XAUUSD / sintético / Boom-Crash (1.2.0)
 │   ├── SessionClock.mqh     (*) conversión de zonas horarias y sesiones
 │   ├── StateStore.mqh       (*) persistencia atómica de estado
 │   ├── MarketEngine.mqh
 │   ├── RegimeEngine.mqh
+│   ├── PatternLib.mqh       (*) detección de patrones compartida (Fase 4)
+│   ├── StrategyBase.mqh     (*) base de estrategias: SL/TP, confirmación M5, invariantes (Fase 4)
 │   ├── StrategySMC.mqh
 │   ├── StrategyBreakout.mqh
 │   ├── StrategyReversal.mqh
 │   ├── AdaptiveEngine.mqh
 │   ├── RiskManager.mqh
+│   ├── TradeGateway.mqh     (*) única puerta al servidor (real o simulada en pruebas) (Fase 7)
 │   ├── ExecutionManager.mqh
 │   ├── NewsManager.mqh
 │   ├── PositionManager.mqh
 │   ├── LearningEngine.mqh
 │   ├── Dashboard.mqh        (*) panel en el gráfico
+│   ├── WebDashboard.mqh     cliente del dashboard web (1.1.0, opcional)
 │   └── Logger.mqh
 ├── Files/{history,models,reports,logs}   # datos generados (no versionados salvo .gitkeep)
 ├── Tests/{Backtesting,Validation,StressTests}
 ├── Tools/                   (*) scripts Python offline (Challenger, reportes)
+├── WebDashboard/            servidor e interfaz del dashboard web (1.1.0)
 └── Documentation/
 ```
+
+`PatternLib` y `StrategyBase` se añadieron en la Fase 4 para cumplir "no duplicar lógica entre módulos": barridos, rupturas, FVG y construcción de SL/TP los usan varias estrategias.
 
 `(*)` = **módulos adicionales propuestos** que no estaban en la lista original. Justificación:
 - `Types.mqh`: evita dependencias circulares y duplicación de structs entre módulos.
@@ -188,10 +196,10 @@ sequenceDiagram
 | `ACCOUNT` | Cuenta real sin autorización explícita; trading algorítmico deshabilitado en terminal/EA/cuenta. |
 | `DATA` | Datos insuficientes, desactualizados o inválidos en cualquier TF. |
 | `CONNECTION` | `TERMINAL_CONNECTED` falso o último tick más viejo que el umbral. |
-| `SESSION` | Fuera de Londres/NY (convertido a hora servidor), o mercado cerrado según `SymbolInfoSessionTrade`. |
-| `NEWS` | Ventana de bloqueo activa o fuente de noticias no verificable (política conservadora). |
+| `SESSION` | Fuera de Londres/NY (convertido a hora servidor), o mercado cerrado según `SymbolInfoSessionTrade`. En índices sintéticos (1.2.0) solo cuenta la sesión del bróker: el filtro Londres/NY no aplica. |
+| `NEWS` | Ventana de bloqueo activa o fuente de noticias no verificable (política conservadora). No aplica a índices sintéticos. |
 | `DAILY_LIMIT` | Pérdida diaria ≥ límite. |
-| `SPREAD` | Spread > máximo absoluto o > k × spread medio. |
+| `SPREAD` | Spread > máximo (puntos en XAUUSD; fracción del ATR M15 en sintéticos). |
 | `REGIME` | Régimen = `NO_TRADE`. |
 | `PENDING` | Existe una solicitud de ejecución en estado incierto sin reconciliar. |
 
@@ -313,6 +321,12 @@ struct PositionRecord {               // reconstruible desde servidor + StateSto
 
 ---
 
+### 7.1 Implementación (Fase 7)
+- `TradeGateway.mqh`: interfaz con `CTerminalGateway` (OrderCheck/OrderSend, posiciones, órdenes, historial) — ExecutionManager y PositionManager no llaman a la API de trading directamente, lo que permite probarlos con un servidor simulado.
+- Clasificación de retcodes: DONE/DONE_PARTIAL/PLACED = éxito; REQUOTE/PRICE_CHANGED/PRICE_OFF = reintentable (máx. 2); TIMEOUT/CONNECTION/ERROR/sin código = **incierto (no se reintenta)**; el resto = rechazo.
+- La solicitud se registra como pendiente **antes** de `OrderSend`; mientras esté pendiente no se envía otra. Reconciliación: posición con el comentario → posición con misma dirección/volumen abierta tras el envío (si el bróker cambió el comentario) → deal de entrada en el historial → orden aún en proceso → sin rastro tras 90 s = no ejecutada.
+- Comentario de orden: `XA|<hash de 8 hex>` (corto para tolerar truncado).
+
 ## 8. Seguridad operativa
 
 ### 8.1 Máquina de estados
@@ -394,7 +408,12 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 9. **Ficheros**: sandbox en `MQL5/Files` (o carpeta común con `FILE_COMMON`). Los agentes del tester tienen su propio sandbox.
 10. **Sin hilos**: todo corre en un único hilo de eventos; cálculos pesados (SMC sobre muchas velas) deben ser incrementales para no bloquear `OnTick`.
 11. **ONNX**: MQL5 soporta modelos ONNX (según mi conocimiento, desde builds de 2023 — verificar). Posible vía futura para un modelo del Challenger, siempre como filtro de estrategia, nunca de riesgo.
-12. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
+12. **`TimeCurrent()` no es "ahora"**: devuelve la hora del último tick conocido (en fin de semana o sin conexión puede ser de días antes; en la Fase 2 se observó 2024-08-23 con el terminal desconectado). Para la hora actual del servidor se usa `TimeTradeServer()`.
+13. **El Strategy Tester exige una cuenta**: aunque el símbolo sea personalizado, el tester no arranca si el terminal no tiene una cuenta configurada (observado en Fase 3). Las pruebas en tester se ejecutan en tu terminal.
+14. **Símbolos personalizados (solo pruebas)**: `CustomTicksAdd` reescribe la vela que contiene el tick como vela plana. Las pruebas que comparan series lo evitan.
+15. **EA en símbolo personalizado sin conexión**: el terminal no inicializa el EA ("symbol synchronization timeout"). Solo afecta a las pruebas en el entorno de desarrollo.
+16. **`SYMBOL_TRADE_TICK_VALUE_LOSS` = 0** cuando no hay conversión disponible: respaldo a `SYMBOL_TRADE_TICK_VALUE` con advertencia.
+17. **Datos históricos**: la calidad del backtest depende de los ticks del bróker. "Every tick based on real ticks" requiere que Deriv provea historial de ticks suficiente — verificar disponibilidad y antigüedad.
 
 ---
 
@@ -428,6 +447,8 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 - Los eventos con hora "todo el día"/sin hora exacta se tratan con ventana ampliada configurable.
 - No se inventan eventos; un CSV con fecha de exportación anterior al período probado se rechaza.
 
+**Implementado (Fase 8):** `NewsManager.mqh`. Horas en hora del servidor de punta a punta (calendario MT5 y CSV del tester usan la zona del bróker; que el calendario entregue hora del servidor es según mi conocimiento de la documentación — verificar con `ExportCalendar` y un evento conocido). Clasificación por nombre: NFP, CPI, PCE, FOMC, tasas, Fed/Powell = mayor (30/30 min); empleo con importancia ≥ moderada y cualquier USD de alta importancia = USD (20/20 min). Política D3: fuente con error, vacía, con más de 60 min sin recarga correcta, o instante fuera de la cobertura → bloqueo de todas las entradas nuevas. Exportador: `Tests/Backtesting/ExportCalendar.mq5`.
+
 ## 14. LearningEngine — Champion vs Challenger
 
 - **Champion (dentro del EA):** solo **lee** `Files/models/champion_vN.json` (parámetros de estrategia y umbrales de puntuación) y verifica: hash SHA-256 (`CryptEncode` con `CRYPT_HASH_SHA256` — verificar) contra `champion_vN.sha256`, campo `approved_by`/`approved_at`, y que **no contenga claves de riesgo** (lista negra explícita). Si falla → usa los parámetros por defecto compilados y lo registra.
@@ -435,10 +456,23 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 - **Challenger (fuera del EA, `Tools/`):** Python lee los logs/CSVs, lanza el Strategy Tester por línea de comandos con configuraciones candidatas, ejecuta IS/OOS/walk-forward, y produce un reporte comparativo con penalización por sobreajuste, inestabilidad y drawdown.
 - **Promoción:** solo tú, editando/aprobando el fichero de modelo (o un comando explícito documentado). Nunca automática.
 
+**Implementado (Fase 9):** `LearningEngine.mqh` (diario de operaciones CSV con contexto, métricas por estrategia/sesión/régimen/día, carga del modelo `<Common>/Files/XAUUSD/champion.model`) y `Tools/challenger.py` (`report`, `compare`, `approve`, `folds`).
+- Formato del modelo: líneas `clave=valor` con `version`, `approved=yes`, `approved_by`, `approved_at`, parámetros de la lista blanca y `sha256=` del cuerpo (todas las líneas anteriores con `\n`). Lista blanca idéntica en MQL5 y Python (verificado por prueba). Cualquier clave fuera de ella invalida el modelo entero.
+- `ApplyChampion` recibe solo configuraciones de régimen, puntuación y estrategias: **no puede** tocar riesgo, ejecución, posiciones ni noticias. Si un valor deja una configuración inválida no se aplica nada.
+- Criterios de `compare` para recomendar promoción: ≥ 100 operaciones OOS, esperanza OOS > 0, PF OOS ≥ 1.2, ≥ 2/3 de pliegues OOS positivos, drawdown OOS ≤ 1.2 × el del Champion, puntuación robusta (esperanza OOS − 0.5·degradación IS→OOS − 0.5·dispersión entre pliegues − 0.02·DD en R) mayor que la del Champion e IC 95 % bootstrap de la mejora por encima de 0. Aun así la promoción exige `approve --i-approve`.
+
 ## 15. Dashboard
 
 - **MT5 (Fase 10):** objetos de gráfico (`OBJ_LABEL`, `OBJ_BUTTON`, `OBJ_RECTANGLE_LABEL`) actualizados en `OnTimer` (no en cada tick). Botones: pausar/reanudar entradas, modo seguro, cerrar todas (**doble clic de confirmación en < 5 s**, no `MessageBox`, que bloquea el hilo), abrir carpeta de logs (mostrar ruta).
-- **Web (diseño posterior):** el EA solo hace **salida** HTTPS (`WebRequest`) hacia un backend propio con telemetría firmada (HMAC con token de dashboard, nunca credenciales de trading). Comandos remotos limitados a *pausa* y *modo seguro* (nunca abrir operaciones), recogidos por *polling* y firmados. Requiere: servidor HTTPS propio, URL en lista blanca del terminal, token almacenado fuera del repositorio. No se construirá ninguna conexión ficticia.
+- **Web (implementado en 1.1.0, opcional):** el EA solo hace **salida** HTTPS (`WebRequest`, desde `OnTimer`, con backoff) hacia `WebDashboard/server.py` con telemetría firmada (HMAC-SHA256 con token de dashboard, nunca credenciales de trading). Comandos remotos limitados a `PAUSE`, `RESUME` y `SAFE_MODE` (nunca abrir/cerrar operaciones ni salir del modo seguro), recogidos por *polling*, firmados por el servidor y verificados por el EA. Detalle: [WEB_DASHBOARD.md](WEB_DASHBOARD.md).
+
+## 15b. EA integrado (Fase 11)
+- `OnInit`: símbolo (exclusivo XAUUSD salvo `InpAllowAnySymbol`), especificación, cuenta (demo / real con doble confirmación, Hedging/Netting), configuración de todos los módulos con límites duros, modelo Champion (sin riesgo), estado persistente (corrupto → modo seguro), base diaria (restaurada o reconstruida desde el historial), reconciliación de la solicitud pendiente, adopción de posiciones (sin SL → modo seguro), panel.
+- `OnTick` y `OnTimer` → gestión protectora (con límite de frecuencia) + vela M5 nueva → pipeline.
+- `OnTimer` (1 s): reloj, noticias, pérdida diaria y reset, reconciliación, cambio de especificación (→ modo seguro), guardado periódico, panel y, si está activado, ciclo del dashboard web.
+- `OnTradeTransaction`: depósitos/retiros (excluidos de la pérdida diaria), confirmación de entradas, cierres → diario.
+- `OnDeinit`: guarda estado y reporte; **no cierra posiciones**.
+- `OnTester`: esperanza en R × √n − 0.1 × drawdown en R (0 con menos de 30 operaciones).
 
 ## 16. Dependencias externas
 
@@ -466,11 +500,16 @@ No tengo datos verificados de las especificaciones actuales de Deriv. **No las a
 | 8 | `NewsManager` + exportador de calendario | Tests de ventanas |
 | 9 | `LearningEngine` + `Tools/` Challenger | Validación independiente |
 | 10 | `Dashboard` | — |
-| 11 | Integración en `XAUUSD_Autonomous.mq5` | Compilación completa |
+| 11 | Integración en `XAUUSD_Autonomous.mq5` | Compilación completa — **hecho** |
 | 12 | Validación (TESTING.md) | Criterios de aceptación |
 | 13 | Demo | Comparación demo vs backtest |
 
-## 18. Decisiones pendientes (necesito tu respuesta)
+## 18. Decisiones (aprobadas el 2026-10-12)
+
+Aprobadas por el usuario: D1 sí (módulos `Types`, `SessionClock`, `StateStore`, `Dashboard` y carpeta `Tools/`); D2 sí (`XAUUSD_AUTONOMOUS/`); D3 (a) bloquear todas las entradas nuevas si el calendario no es verificable; D4 reset diario a las 00:00 hora del servidor; D5 sí (Wine + MetaEditor instalados y funcionando); límites duros de RISK_MANAGEMENT.md §1 aprobados.
+
+Texto original de las preguntas:
+
 
 - **D1.** ¿Apruebas los módulos adicionales `Types`, `SessionClock`, `StateStore`, `Dashboard` y la carpeta `Tools/` (Python offline)?
 - **D2.** ¿Ubicación: el proyecto vive en `XAUUSD_AUTONOMOUS/` dentro de este repositorio (como está ahora)?

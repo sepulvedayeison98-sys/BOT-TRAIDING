@@ -1,6 +1,6 @@
 # Gestión de riesgo — especificación
 
-> Estado: **diseño (Fase 1)**. RiskManager se implementa en la Fase 6 y **ninguna ejecución se habilita antes**.
+> Estado: **implementado en la Fase 6** (`Include/XAUUSD/RiskManager.mqh`, `StateStore.mqh`) y probado con 90 pruebas (`Tests/Validation/Test_Phase6.mq5`). Los límites duros de §1 están aprobados y codificados como constantes.
 > Ningún parámetro de este documento puede ser modificado por el LearningEngine.
 
 ## 1. Parámetros iniciales y límites duros
@@ -61,12 +61,18 @@ Riesgo restante de cada posición propia abierta:
 
 **Consecuencia práctica (1 % + 2 %):** como máximo 2 posiciones con riesgo pleno a la vez. Una 3.ª solo es posible cuando alguna ya está protegida en break-even. Esto es intencional.
 
+**Cartera compartida (1.2.0, `InpSharedPortfolio=true`).** Con un gráfico por símbolo (XAUUSD, índices sintéticos) y la misma magic, la suma incluye las posiciones de esa magic en **todos** los símbolos. El riesgo de cada una se calcula con `OrderCalcProfit` sobre su propio símbolo. Si no tiene SL o el cálculo falla, cuenta como `base_riesgo × riesgo_por_operación` (conservador). El máximo de posiciones y el peor caso del día también son de la cartera. Con `false` o con magics distintas, cada gráfico tiene sus propios límites. Ver [SYNTHETIC_INDICES.md](SYNTHETIC_INDICES.md).
+
 ## 6. Pérdida diaria
 
 - **Reset**: a la hora configurada en **hora del servidor** (propuesta: 00:00, decisión D4).
 - **Base**: `E0 = Equity` en el instante del reset, persistida en `state.json`.
 - **Sin snapshot del día** (EA arrancado a mitad del día o fichero perdido): `E0 = Balance_actual − PnL_realizado_hoy` (reconstruido desde los deals del día, neto de comisiones y swaps, excluyendo depósitos/retiros). Es una aproximación: ignora el flotante que existiera en el reset, que no se puede recuperar. Se registra en el log que la base es reconstruida.
 - **PnL del día** = `Equity_actual − E0 − depósitos_hoy + retiros_hoy` (depósitos/retiros detectados como deals `DEAL_TYPE_BALANCE`). Incluye realizado + flotante + comisiones + swaps.
+- **Alcance** (`InpDailyLossScope`, 1.1.1; decisión del usuario del 2026-10-14): por defecto **solo las operaciones del EA** (su número mágico y símbolo). Entonces `PnL_día = realizado propio desde el reset (beneficio + comisión + swap) + flotante de sus posiciones abiertas`; las operaciones manuales o de otros EA en la misma cuenta **no** consumen el límite. El porcentaje se sigue calculando sobre `E0` (equity de la cuenta al reset). Con `DAILY_SCOPE_ACCOUNT` se usa la fórmula de toda la cuenta de arriba. Si el alcance cambia, un bloqueo guardado del mismo día se reevalúa con el nuevo alcance.
+  - Consecuencia: con alcance EA, la cuenta puede perder más del 3 % en un día por operaciones ajenas; el EA solo garantiza que **sus** operaciones no lo superen. Recomendación: no operar a mano ni con otros EA en la misma cuenta.
+  - Aproximación: el flotante de una posición propia que viene del día anterior cuenta completo en el día actual.
+  - Con cartera compartida (1.2.0) "propio" significa esta magic en todos los símbolos: todos los gráficos ven la misma cifra y se bloquean juntos.
 - **Bloqueo**: si `PnL_día ≤ −3 % × E0` → estado `DAILY_LIMIT`.
 - **Chequeo previo de peor caso** (recomendado): rechazar una nueva entrada si `pérdida_actual_del_día + exposición_después > 3 % × E0`. Así, aunque todos los SL se ejecuten, el día no supera el límite (salvo gaps/slippage).
 - Al alcanzar el límite: bloquear entradas, registrar motivo, **mantener** BE/trailing/invalidación. **No** cerrar posiciones ganadoras automáticamente.
@@ -108,3 +114,10 @@ Detección en `OnInit` con `AccountInfoInteger(ACCOUNT_MARGIN_MODE)`:
 - Pérdida diaria con flotante, depósitos y retiros a mitad del día, reinicio del EA a mitad del día.
 - Netting: rechazo de 2.ª posición.
 - Inputs fuera de límites duros → `INIT_PARAMETERS_INCORRECT`.
+
+## 10. Notas de implementación (Fase 6)
+- `OrderCalcProfit`/`OrderCalcMargin` están detrás de `CTradeCalculator`: en producción `CTerminalCalculator` (funciones reales de MT5); en pruebas, un calculador simulado.
+- Verificación cruzada: si `OrderCalcProfit` difiere en más de un 5 % del cálculo por tick value, el rechazo es **crítico** (el EA entra en modo seguro), porque indica especificación o conversión de divisa incoherentes.
+- Orden de comprobaciones: inicialización → coherencia de precios → límite diario → R:R → stops level → número de posiciones / Netting → exposición existente (posición sin SL = crítico) → volumen → exposición agregada → peor caso del día → margen.
+- `CDailyLossTracker`: el EA llama a `Update(hora_servidor, equity)` en cada temporizador; el bloqueo queda "enganchado" hasta el siguiente reset. El estado se persiste en `StateStore` y solo se restaura si es del mismo día.
+- `StateStore`: archivo clave=valor, escritura atómica (`.tmp` + `FileMove`), suma FNV-1a; estado alterado o truncado = corrupto → modo seguro.

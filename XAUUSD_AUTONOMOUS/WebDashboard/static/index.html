@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>XAUUSD Autonomous</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 18h16M6 18l2.2-7h7.6l2.2 7M9.4 11l1.2-4h2.8l1.2 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z" fill="currentColor"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.3v.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.4-3 8-7 9.5-4-1.5-7-5.1-7-9.5V6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M7 17L17 7" fill="none" stroke="currentColor" stroke-width="1.9"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 16l4.5-5 4 3.5L21 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l8.5 4.5L12 13 3.5 8.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 16a8 8 0 1 1 16 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 16l4-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-news" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-pos" viewBox="0 0 24 24"><path d="M5 19V9M10 19V5M15 19v-7M20 19v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-dd" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 17h6v-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15 12.5h5.5M6 6l9-2.5 1 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24"><path d="M12 13.5a1.5 1.5 0 1 0 0-.01M8 9.5a5.6 5.6 0 0 0 0 7.5M16 9.5a5.6 5.6 0 0 1 0 7.5M5 6.5a10 10 0 0 0 0 13.5M19 6.5a10 10 0 0 1 0 13.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 5H6v14h8M10 12h10M17 8.5l3.5 3.5-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 11v5.5M12 7.8v.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M4 14.5h16M10 10v9" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+</svg>
+
+<!-- Acceso -->
+<main id="login" class="login" hidden>
+  <div class="login-card">
+    <div class="brand">
+      <span class="brand-tile"><svg class="ic"><use href="#i-logo"/></svg></span>
+      <div>
+        <h1>XAUUSD Autonomous</h1>
+        <p class="sub">Centro de control del EA</p>
+      </div>
+    </div>
+    <form id="login-form" autocomplete="on">
+      <label class="lbl" for="password">Contraseña del dashboard</label>
+      <input id="password" type="password" autocomplete="current-password" required minlength="1">
+      <button type="submit" class="btn btn-primary"><svg class="ic"><use href="#i-lock"/></svg>Entrar</button>
+      <p id="login-error" class="form-error" role="alert"></p>
+    </form>
+    <p class="fine">La sesión dura 12 horas. Esta contraseña no da acceso a tu cuenta de trading.</p>
+  </div>
+</main>
+
+<!-- Aplicación -->
+<div id="app" hidden>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div class="brand">
+        <span class="brand-tile"><svg class="ic"><use href="#i-logo"/></svg></span>
+        <div>
+          <h1>XAUUSD Autonomous</h1>
+          <p class="sub" id="subtitle">Esperando el primer reporte del EA</p>
+        </div>
+      </div>
+      <dl class="meta">
+        <div><dt class="lbl">Conexión</dt><dd><span id="online" class="live off"><i></i><span id="online-text">sin datos</span></span></dd></div>
+        <div><dt class="lbl">Último reporte</dt><dd class="mono" id="last-seen">—</dd></div>
+        <div><dt class="lbl">Hora servidor</dt><dd class="mono" id="time-server">—</dd></div>
+        <div><dt class="lbl">Hora Colombia</dt><dd class="mono" id="time-col">—</dd></div>
+        <div><dt class="lbl">Versión</dt><dd class="mono" id="version">—</dd></div>
+      </dl>
+      <button id="logout" class="btn btn-ghost btn-icon" type="button" title="Cerrar sesión" aria-label="Cerrar sesión"><svg class="ic"><use href="#i-logout"/></svg></button>
+    </div>
+    <div class="wrap instances" id="instances" hidden>
+      <span class="lbl">Instancias</span>
+      <div class="inst-list" id="inst-list" role="group" aria-label="Instancia del EA que se muestra"></div>
+    </div>
+    <nav class="tabs wrap" role="tablist" aria-label="Secciones">
+      <button role="tab" id="tab-resumen" aria-controls="view-resumen" data-view="resumen"><em>01</em>Resumen</button>
+      <button role="tab" id="tab-riesgo" aria-controls="view-riesgo" data-view="riesgo"><em>02</em>Riesgo</button>
+      <button role="tab" id="tab-mercado" aria-controls="view-mercado" data-view="mercado"><em>03</em>Mercado</button>
+      <button role="tab" id="tab-control" aria-controls="view-control" data-view="control"><em>04</em>Control</button>
+    </nav>
+  </header>
+
+  <main class="wrap content">
+    <div id="offline" class="banner banner-critical" role="status" hidden>
+      <svg class="ic"><use href="#i-alert"/></svg>
+      <p><b>El EA no está reportando.</b> <span id="offline-text">Revisa que el PC y MetaTrader 5 estén encendidos y que el EA tenga el dashboard activado.</span></p>
+    </div>
+
+    <!-- 01 Resumen -->
+    <section id="view-resumen" class="view" role="tabpanel" aria-labelledby="tab-resumen">
+      <div class="status" id="status-card">
+        <div class="status-main">
+          <span class="lbl">Estado del EA</span>
+          <div class="state-row">
+            <span id="state-chip" class="state-chip"><svg class="ic"><use id="state-icon" href="#i-clock"/></svg><span id="state">—</span></span>
+          </div>
+          <p class="state-reason" id="state-reason">—</p>
+        </div>
+        <div class="status-gate">
+          <span class="lbl">¿Puede abrir operaciones ahora?</span>
+          <p class="gate-answer" id="gate-answer">—</p>
+          <ul class="blockers" id="blockers"></ul>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <article class="kpi kpi-blue">
+          <h3 class="lbl"><svg class="ic"><use href="#i-wallet"/></svg>Equity</h3>
+          <p class="kpi-value"><span id="equity">—</span><small id="currency"></small></p>
+          <p class="kpi-sub" id="equity-sub">—</p>
+        </article>
+        <article class="kpi" id="kpi-pnl">
+          <h3 class="lbl"><svg class="ic"><use href="#i-wave"/></svg>Resultado del EA hoy</h3>
+          <p class="kpi-value"><span id="pnl">—</span><small id="pnl-cur"></small></p>
+          <p class="kpi-sub" id="pnl-sub">—</p>
+          <div class="meter" aria-hidden="true"><div id="loss-meter"></div></div>
+          <p class="kpi-foot mono" id="loss-foot">—</p>
+        </article>
+        <article class="kpi" id="kpi-exposure">
+          <h3 class="lbl"><svg class="ic"><use href="#i-layers"/></svg>Exposición</h3>
+          <p class="kpi-value"><span id="exposure">—</span><small>%</small></p>
+          <p class="kpi-sub" id="exposure-sub">—</p>
+          <div class="meter" aria-hidden="true"><div id="exposure-meter"></div></div>
+          <p class="kpi-foot mono" id="exposure-foot">—</p>
+        </article>
+        <article class="kpi" id="kpi-positions">
+          <h3 class="lbl"><svg class="ic"><use href="#i-pos"/></svg>Posiciones del EA</h3>
+          <p class="kpi-value"><span id="positions">—</span><small id="positions-max"></small></p>
+          <p class="kpi-sub" id="positions-sub">—</p>
+          <div class="slots" id="slots" aria-hidden="true"></div>
+        </article>
+        <article class="kpi" id="kpi-dd">
+          <h3 class="lbl"><svg class="ic"><use href="#i-dd"/></svg>Drawdown</h3>
+          <p class="kpi-value"><span id="drawdown">—</span><small>%</small></p>
+          <p class="kpi-sub" id="drawdown-sub">desde el máximo de equity</p>
+        </article>
+      </div>
+
+      <section class="card">
+        <header class="card-h">
+          <div>
+            <h2>Equity</h2>
+            <p class="card-note" id="chart-note">Un punto por reporte del EA, agregado por intervalos</p>
+          </div>
+          <div class="card-tools">
+            <div class="seg" role="group" aria-label="Rango">
+              <button type="button" data-range="21600">6 H</button>
+              <button type="button" data-range="86400">24 H</button>
+              <button type="button" data-range="259200" class="on">3 D</button>
+            </div>
+            <button id="toggle-table" type="button" class="btn btn-ghost btn-sm" aria-expanded="false"><svg class="ic"><use href="#i-table"/></svg>Tabla</button>
+          </div>
+        </header>
+        <div class="chart-stats" id="chart-stats"></div>
+        <div id="chart" class="chart" role="img" aria-label="Evolución de la equity"></div>
+        <div class="table-wrap" id="equity-table-wrap" hidden>
+          <table id="equity-table"><thead><tr><th>Hora</th><th class="num">Equity</th></tr></thead><tbody></tbody></table>
+        </div>
+      </section>
+
+      <div class="grid-2">
+        <section class="card">
+          <header class="card-h"><h2>Posiciones abiertas</h2><span class="tag" id="pos-tag">0</span></header>
+          <div class="table-wrap">
+            <table id="positions-table">
+              <thead><tr><th>Ticket</th><th>Tipo</th><th class="num">Lotes</th><th class="num">Entrada</th><th class="num">SL</th><th class="num">TP</th><th class="num">P/L</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="empty" id="positions-empty">El EA no tiene posiciones abiertas.</p>
+        </section>
+        <section class="card">
+          <header class="card-h"><h2>Última decisión</h2><span class="tag" id="decision-tag" hidden></span></header>
+          <dl class="kv">
+            <dt>Señal</dt><dd id="last-signal">—</dd>
+            <dt>Operación</dt><dd id="last-trade">—</dd>
+            <dt>Estrategia</dt><dd id="strategy">—</dd>
+            <dt>Puntuación</dt><dd><span id="score">—</span><div class="meter meter-thin" aria-hidden="true"><div id="score-meter"></div></div></dd>
+          </dl>
+        </section>
+      </div>
+    </section>
+
+    <!-- 02 Riesgo -->
+    <section id="view-riesgo" class="view" role="tabpanel" aria-labelledby="tab-riesgo" hidden>
+      <div class="sec-h">
+        <h2>Control de riesgo</h2>
+        <span class="tag tag-blue" id="scope-tag">—</span>
+        <p>Cada regla se evalúa antes de abrir una operación. Si una falla, el EA no entra.</p>
+      </div>
+      <section class="card card-flush">
+        <div class="table-wrap">
+          <table class="rules">
+            <thead><tr><th>Regla</th><th class="num">Actual</th><th class="num">Límite</th><th class="use-col">Uso</th><th>Estado</th></tr></thead>
+            <tbody id="rules"></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="banner banner-info">
+        <svg class="ic"><use href="#i-info"/></svg>
+        <p id="scope-text">—</p>
+      </div>
+    </section>
+
+    <!-- 03 Mercado -->
+    <section id="view-mercado" class="view" role="tabpanel" aria-labelledby="tab-mercado" hidden>
+      <div class="sec-h">
+        <h2>Lectura del mercado</h2>
+        <span class="tag" id="session-tag">—</span>
+        <p>Lo que el EA ve en la última vela cerrada de cada temporalidad.</p>
+      </div>
+      <div class="market">
+        <article class="card regime-card">
+          <h3 class="lbl"><svg class="ic"><use href="#i-wave"/></svg>Régimen</h3>
+          <p class="big" id="regime">—</p>
+          <p class="muted" id="regime-raw">—</p>
+          <p class="note" id="regime-note"></p>
+        </article>
+        <article class="card">
+          <h3 class="lbl"><svg class="ic"><use href="#i-layers"/></svg>Estructura</h3>
+          <dl class="kv kv-tight">
+            <dt>Tendencia H1</dt><dd id="trend-h1">—</dd>
+            <dt>ADX H1</dt><dd class="mono" id="adx">—</dd>
+            <dt>EMA50 vs EMA200</dt><dd id="ema">—</dd>
+            <dt>Estructura M15</dt><dd id="struct-m15">—</dd>
+            <dt>Momentum M5</dt><dd id="momentum">—</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <h3 class="lbl"><svg class="ic"><use href="#i-gauge"/></svg>Volatilidad y costo</h3>
+          <div class="gauge-row">
+            <span class="gauge-l">Spread</span>
+            <span class="mono gauge-v" id="spread">—</span>
+          </div>
+          <div class="bar-cmp" aria-hidden="true"><div id="spread-bar"></div><i id="spread-avg-mark"></i></div>
+          <p class="note" id="spread-note">—</p>
+          <div class="gauge-row"><span class="gauge-l">ATR (M15)</span><span class="mono gauge-v" id="atr">—</span></div>
+        </article>
+        <article class="card">
+          <h3 class="lbl"><svg class="ic"><use href="#i-signal"/></svg>RSI (M15)</h3>
+          <p class="big mono" id="rsi">—</p>
+          <div class="rsi-scale" aria-hidden="true"><span class="z z-lo"></span><span class="z z-mid"></span><span class="z z-hi"></span><i id="rsi-mark"></i></div>
+          <div class="rsi-ticks mono" aria-hidden="true"><span>0</span><span>30</span><span>70</span><span>100</span></div>
+          <p class="note" id="rsi-note">—</p>
+        </article>
+        <article class="card news-card" id="news-card">
+          <h3 class="lbl"><svg class="ic"><use href="#i-news"/></svg>Noticias USD</h3>
+          <p class="big" id="news-state">—</p>
+          <p class="muted" id="news-next">—</p>
+          <p class="note" id="news-note">Bloqueo de ±30 min en CPI, NFP, FOMC, PCE y tasas; ±20 min en otros eventos USD.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 04 Control -->
+    <section id="view-control" class="view" role="tabpanel" aria-labelledby="tab-control" hidden>
+      <div class="sec-h">
+        <h2>Control remoto</h2>
+        <p>El EA aplica el comando en su siguiente reporte (unos 30 s). Cerrar posiciones y salir del modo seguro solo se hace desde MT5.</p>
+      </div>
+      <div class="cmd-target" id="cmd-target" hidden>
+        <span class="lbl">Destino</span>
+        <div class="seg" id="target-seg">
+          <button type="button" class="on" data-target="one" id="target-one">Esta instancia</button>
+          <button type="button" data-target="all">Todas</button>
+        </div>
+        <p class="note" id="target-note">—</p>
+      </div>
+      <div class="actions" id="actions">
+        <article class="action">
+          <h3><svg class="ic"><use href="#i-pause"/></svg>Pausar entradas</h3>
+          <p>Deja de abrir operaciones nuevas. Las posiciones abiertas siguen protegidas: break-even, trailing y stop loss.</p>
+          <p class="action-when" id="when-PAUSE">—</p>
+          <button type="button" class="btn btn-warning" data-cmd="PAUSE">Pausar</button>
+        </article>
+        <article class="action">
+          <h3><svg class="ic"><use href="#i-play"/></svg>Reanudar entradas</h3>
+          <p>Vuelve a buscar entradas. Solo actúa si el EA está en pausa; no levanta el límite diario ni el modo seguro.</p>
+          <p class="action-when" id="when-RESUME">—</p>
+          <button type="button" class="btn btn-primary" data-cmd="RESUME">Reanudar</button>
+        </article>
+        <article class="action action-critical">
+          <h3><svg class="ic"><use href="#i-shield"/></svg>Modo seguro</h3>
+          <p>Bloquea todas las entradas hasta que lo desactives a mano en el panel de MT5. Úsalo ante cualquier duda.</p>
+          <p class="action-when" id="when-SAFE_MODE">—</p>
+          <button type="button" class="btn btn-danger" data-cmd="SAFE_MODE">Activar modo seguro</button>
+        </article>
+      </div>
+      <p class="cmd-msg" id="cmd-msg" role="status"></p>
+      <section class="card card-flush">
+        <header class="card-h card-h-pad"><h2>Historial de comandos</h2></header>
+        <div class="table-wrap">
+          <table id="commands">
+            <thead><tr><th>#</th><th>Comando</th><th>Destino</th><th>Solicitado</th><th>Estado</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="empty" id="commands-empty">Todavía no se ha enviado ningún comando.</p>
+      </section>
+    </section>
+
+    <footer class="foot">
+      <span id="refresh-note">Actualiza cada 10 s</span>
+      <span>Solo lectura + pausar, reanudar y modo seguro</span>
+    </footer>
+  </main>
+</div>
+
+<dialog id="confirm" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title">Confirmar comando</h2>
+    <p id="confirm-text"></p>
+    <menu>
+      <button value="cancel" class="btn btn-ghost">Cancelar</button>
+      <button value="ok" class="btn btn-primary" id="confirm-ok">Confirmar</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="chart-tip" class="tip" hidden></div>
+</body>
+</html>
