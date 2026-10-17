@@ -332,6 +332,8 @@ private:
    CTradeCalculator *m_calc;
    CLogger          *m_log;
    bool              m_ready;
+   double            m_ext_money;       // riesgo restante de la cartera en OTROS símbolos (misma magic)
+   int               m_ext_positions;   // posiciones de la cartera en otros símbolos
 
    bool              Reject(RiskDecision &d, const string why, const bool critical = false)
      {
@@ -344,7 +346,7 @@ private:
      }
 
 public:
-                     CRiskManager(void) { RiskDefaultConfig(m_cfg); m_calc = NULL; m_log = NULL; m_ready = false; }
+                     CRiskManager(void) { RiskDefaultConfig(m_cfg); m_calc = NULL; m_log = NULL; m_ready = false; m_ext_money = 0.0; m_ext_positions = 0; }
 
    bool              Init(const RiskConfig &cfg, CTradeCalculator *calc, CLogger *log)
      {
@@ -367,6 +369,16 @@ public:
      }
 
    RiskConfig        Config(void) const { return m_cfg; }
+
+   //--- Cartera compartida: varias instancias del EA (un gráfico por símbolo) con la misma magic
+   //--- comparten exposición y número de posiciones. El EA lo actualiza antes de cada Assess.
+   void              SetExternalExposure(const double money, const int positions)
+     {
+      m_ext_money = MathMax(0.0, money);
+      m_ext_positions = MathMax(0, positions);
+     }
+   double            ExternalMoney(void) const     { return m_ext_money; }
+   int               ExternalPositions(void) const { return m_ext_positions; }
 
    //--- Base de riesgo: el menor entre balance y equity (conservador)
    static double     RiskBase(const AccountSnapshot &a) { return MathMin(a.balance, a.equity); }
@@ -451,8 +463,12 @@ public:
       int npos = ArraySize(positions);
       if(acc.netting && npos > 0)
         { Reject(d, "cuenta Netting con posición abierta: no se añade ni se invierte (evita promediar)"); return d; }
-      if(npos >= m_cfg.max_positions)
-        { Reject(d, StringFormat("máximo de posiciones simultáneas alcanzado (%d)", m_cfg.max_positions)); return d; }
+      if(npos + m_ext_positions >= m_cfg.max_positions)
+        {
+         Reject(d, (m_ext_positions > 0) ? StringFormat("máximo de posiciones simultáneas alcanzado (%d, %d en otros símbolos de la cartera)", m_cfg.max_positions, m_ext_positions)
+                                         : StringFormat("máximo de posiciones simultáneas alcanzado (%d)", m_cfg.max_positions));
+         return d;
+        }
 
       //--- exposición existente
       double base = RiskBase(acc);
@@ -460,6 +476,7 @@ public:
       string why;
       if(!ExistingExposure(positions, existing, why))
         { Reject(d, why, true); return d; }
+      existing += m_ext_money;
       d.exposure_before_pct = existing / base * 100.0;
 
       //--- pérdida por lote con verificación cruzada
@@ -521,7 +538,7 @@ public:
         { Reject(d, StringFormat("nivel de margen tras abrir %.0f%% < %.0f%%", acc.equity / used * 100.0, m_cfg.min_margin_level_pct)); return d; }
 
       d.approved = true;
-      d.detail = StringFormat("vol=%.2f riesgo=%.2f (%.2f%%) R:R=%.2f margen=%.2f exposición %.2f%% -> %.2f%% día %.2f%%",
+      d.detail = StringFormat("vol=%g riesgo=%.2f (%.2f%%) R:R=%.2f margen=%.2f exposición %.2f%% -> %.2f%% día %.2f%%",
                               d.volume, d.risk_money, d.risk_pct, d.rr, d.margin_required,
                               d.exposure_before_pct, d.exposure_after_pct, d.daily_loss_pct);
       if(m_log != NULL)

@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.2.0] - 2026-10-17 — Índices sintéticos y cartera compartida
+### Añadido
+- `Include/XAUUSD/InstrumentProfile.mqh`: perfil por instrumento detectado por el nombre (`InpProfile=Automático`).
+  - **XAUUSD**: sin cambios.
+  - **Sintético continuo** (Volatility, Step, Jump): 24/7, sin filtro de sesión ni de noticias, sin rango asiático en SMC; spread, desviación, deriva de entrada y offset de break-even como fracción del ATR M15 (`InpSynth*Atr`, hipótesis a calibrar).
+  - **Sintético con spikes** (Boom, Crash): experimental; exige `InpAllowSpikeIndices=true` y por defecto solo opera en la dirección del spike (`InpSpikeSideOnly`), porque un spike en contra puede saltar el SL y romper el 1 % de riesgo.
+- **Cartera compartida** (`InpSharedPortfolio=true`): los gráficos con la misma magic comparten exposición, número de posiciones, pérdida diaria (alcance EA) y peor caso del día. El riesgo de otros símbolos se calcula con su especificación (`OrderCalcProfit`); sin SL o sin cálculo cuenta como el riesgo máximo.
+- Dashboard web con **varias instancias**: selector de instancia, telemetría por símbolo, comandos a una instancia o a todas con confirmación por instancia (`?i=<símbolo>` dentro de la ruta firmada), destino e "Aplicado N de M" en el historial. El servidor migra la base de 1.1.x y acepta EA 1.1.x.
+- Modelo Champion por símbolo para los sintéticos (`XAUUSD/champion_<símbolo>.model`); XAUUSD mantiene `champion.model`.
+- `Documentation/SYNTHETIC_INDICES.md`; `Test_Instruments.mq5`; `SMOKE_PROFILE=synth` en `run_ea_smoke.sh`.
+
+### Cambiado
+- Panel, telemetría y dashboard: perfil, "24/7", noticias "no aplica", spread máximo vigente, posiciones de la cartera, lotes y precios con los decimales del símbolo.
+- Una confirmación de comando repetida devuelve 200 (idempotente) en lugar de 404.
+- Pruebas: `Test_Instruments` 44/44, `Test_Phase6` 112/112, `Test_WebDashboard` 33/33, E2E 39/39, servidor 29.
+
 ## [1.1.2] - 2026-10-14 — Rediseño del dashboard web
 ### Cambiado
 - Interfaz nueva con el sistema visual de los centros de control del usuario (oscuro por defecto, modo claro automático; Barlow, Barlow Condensed e IBM Plex Mono servidas localmente, licencia OFL): pestañas Resumen, Riesgo, Mercado y Control.

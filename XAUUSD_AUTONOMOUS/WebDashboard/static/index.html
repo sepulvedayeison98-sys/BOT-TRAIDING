@@ -72,6 +72,10 @@
       </dl>
       <button id="logout" class="btn btn-ghost btn-icon" type="button" title="Cerrar sesión" aria-label="Cerrar sesión"><svg class="ic"><use href="#i-logout"/></svg></button>
     </div>
+    <div class="wrap instances" id="instances" hidden>
+      <span class="lbl">Instancias</span>
+      <div class="inst-list" id="inst-list" role="group" aria-label="Instancia del EA que se muestra"></div>
+    </div>
     <nav class="tabs wrap" role="tablist" aria-label="Secciones">
       <button role="tab" id="tab-resumen" aria-controls="view-resumen" data-view="resumen"><em>01</em>Resumen</button>
       <button role="tab" id="tab-riesgo" aria-controls="view-riesgo" data-view="riesgo"><em>02</em>Riesgo</button>
@@ -247,7 +251,7 @@
           <h3 class="lbl"><svg class="ic"><use href="#i-news"/></svg>Noticias USD</h3>
           <p class="big" id="news-state">—</p>
           <p class="muted" id="news-next">—</p>
-          <p class="note">Bloqueo de ±30 min en CPI, NFP, FOMC, PCE y tasas; ±20 min en otros eventos USD.</p>
+          <p class="note" id="news-note">Bloqueo de ±30 min en CPI, NFP, FOMC, PCE y tasas; ±20 min en otros eventos USD.</p>
         </article>
       </div>
     </section>
@@ -257,6 +261,14 @@
       <div class="sec-h">
         <h2>Control remoto</h2>
         <p>El EA aplica el comando en su siguiente reporte (unos 30 s). Cerrar posiciones y salir del modo seguro solo se hace desde MT5.</p>
+      </div>
+      <div class="cmd-target" id="cmd-target" hidden>
+        <span class="lbl">Destino</span>
+        <div class="seg" id="target-seg">
+          <button type="button" class="on" data-target="one" id="target-one">Esta instancia</button>
+          <button type="button" data-target="all">Todas</button>
+        </div>
+        <p class="note" id="target-note">—</p>
       </div>
       <div class="actions" id="actions">
         <article class="action">
@@ -283,7 +295,7 @@
         <header class="card-h card-h-pad"><h2>Historial de comandos</h2></header>
         <div class="table-wrap">
           <table id="commands">
-            <thead><tr><th>#</th><th>Comando</th><th>Solicitado</th><th>Estado</th></tr></thead>
+            <thead><tr><th>#</th><th>Comando</th><th>Destino</th><th>Solicitado</th><th>Estado</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

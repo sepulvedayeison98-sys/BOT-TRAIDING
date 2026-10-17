@@ -430,12 +430,61 @@ void TestStateStore(CTestRunner &t)
    FileDelete(file);
   }
 
+//--- 1.2.0: cartera compartida entre símbolos (misma magic)
+void TestPortfolio(CTestRunner &t)
+  {
+   CFakeCalc calc;
+   RiskConfig cfg;
+   RiskDefaultConfig(cfg);
+   CRiskManager rm;
+   rm.Init(cfg, &calc, NULL);
+   SymbolSpec spec;
+   Spec(spec);
+   AccountSnapshot acc;
+   Account(acc, 10000, 10000);
+   CDailyLossTracker daily;
+   daily.Configure(0, 3.0);
+   daily.Update(DAY, 10000);
+   PositionRisk none[];
+
+   t.EqDbl(rm.ExternalMoney(), 0.0, 1e-12, "sin cartera externa por defecto");
+   rm.SetExternalExposure(100.0, 1);                  // 1% abierto en otro símbolo
+   RiskDecision d = rm.Assess(Sig(DIR_LONG, 2400, 2395, 2410), spec, acc, none, daily, 20, 0);
+   t.True(d.approved, "1% en otro símbolo + 1% nuevo = 2% -> aprobado: " + d.reject_reason);
+   t.EqDbl(d.exposure_before_pct, 1.0, 1e-9, "la exposición previa incluye el otro símbolo");
+   t.EqDbl(d.exposure_after_pct, 2.0, 1e-9, "exposición posterior 2%");
+   rm.SetExternalExposure(150.0, 1);                  // 1.5% fuera
+   d = rm.Assess(Sig(DIR_LONG, 2400, 2395, 2410), spec, acc, none, daily, 20, 0);
+   t.True(!d.approved && StringFind(d.reject_reason, "exposición") >= 0, "1.5% en otro símbolo + 1% -> rechazo por exposición");
+   rm.SetExternalExposure(0.0, 3);                    // 3 posiciones en break-even en otros símbolos
+   d = rm.Assess(Sig(DIR_LONG, 2400, 2395, 2410), spec, acc, none, daily, 20, 0);
+   t.True(!d.approved && StringFind(d.reject_reason, "otros símbolos") >= 0, "3 posiciones en otros símbolos -> máximo de posiciones");
+   PositionRisk pos[];
+   AddPos(pos, DIR_LONG, 0.01, 2390, 2400);           // propia en break-even
+   rm.SetExternalExposure(0.0, 2);
+   d = rm.Assess(Sig(DIR_LONG, 2400, 2395, 2410), spec, acc, pos, daily, 20, 0);
+   t.True(!d.approved && StringFind(d.reject_reason, "máximo de posiciones") >= 0, "1 propia + 2 externas = 3 -> rechazo");
+   rm.SetExternalExposure(-5.0, -1);
+   t.True(rm.ExternalMoney() == 0.0 && rm.ExternalPositions() == 0, "valores negativos se acotan a 0");
+   rm.SetExternalExposure(150.0, 0);                  // peor caso del día: 1.5% + 1% < 3%
+   AccountSnapshot a2;
+   Account(a2, 10000, 10000);
+   RiskConfig c2 = cfg;
+   c2.max_exposure_pct = 5.0;
+   CRiskManager rm2;
+   rm2.Init(c2, &calc, NULL);
+   rm2.SetExternalExposure(250.0, 0);                 // 2.5% fuera + 1% = 3.5% > 3% diario
+   d = rm2.Assess(Sig(DIR_LONG, 2400, 2395, 2410), spec, a2, none, daily, 20, 0);
+   t.True(!d.approved && StringFind(d.reject_reason, "peor caso") >= 0, "el peor caso del día cuenta el riesgo de otros símbolos");
+  }
+
 void OnStart()
   {
    CTestRunner t("Test_Phase6");
    TestVolume(t);
    TestExposure(t);
    TestDaily(t);
+   TestPortfolio(t);
    TestConfigAndGuards(t);
    TestStateStore(t);
    t.Finish();

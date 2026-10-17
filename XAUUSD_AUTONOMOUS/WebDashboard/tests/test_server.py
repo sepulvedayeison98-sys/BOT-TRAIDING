@@ -6,12 +6,14 @@ import http.client
 import json
 import os
 import secrets
+import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unittest
 from http.server import ThreadingHTTPServer
+from urllib.parse import quote
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import server as srv  # noqa: E402
@@ -64,6 +66,7 @@ class ServerTest(unittest.TestCase):
         return self.req(method, path, body, {"X-XAD-Timestamp": ts, "X-XAD-Nonce": nonce, "X-XAD-Signature": sig})
 
     def login(self):
+        self.app.login_attempts.clear()   # el límite por minuto se prueba aparte (reloj simulado)
         st, data, hdrs = self.req("POST", "/api/login", json.dumps({"password": PASSWORD}))
         self.assertEqual(st, 200, data)
         cookie = hdrs["Set-Cookie"].split(";")[0]
@@ -74,8 +77,9 @@ class ServerTest(unittest.TestCase):
         body = json.dumps({"equity": 10000.5, "state": "RUNNING", "symbol": "XAUUSD"})
         st, data, _ = self.ea("POST", "/api/ea/telemetry", body)
         self.assertEqual(st, 200, data)
-        _, latest = self.app.store.latest()
+        _, latest, inst = self.app.store.latest("XAUUSD")
         self.assertEqual(latest["equity"], 10000.5)
+        self.assertEqual(inst, "XAUUSD")
 
     def test_bad_signature_rejected(self):
         st, data, _ = self.ea("POST", "/api/ea/telemetry", "{}", token="x" * 40)
@@ -209,9 +213,83 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(sig, srv.sign(TOKEN, srv.command_message(int(c_id), cmd, int(created))))
         # confirmación
         self.assertEqual(self.ea("POST", "/api/ea/ack", str(cid))[0], 200)
-        self.assertEqual(self.ea("POST", "/api/ea/ack", str(cid))[0], 404)   # ya confirmado
+        self.assertEqual(self.ea("POST", "/api/ea/ack", str(cid))[0], 200)   # repetida: idempotente
+        self.assertEqual(self.ea("POST", "/api/ea/ack", "999999")[0], 404)   # desconocido
         st, data, _ = self.ea("GET", "/api/ea/commands")
         self.assertNotIn(f"{cid}|", data)
+
+    # --- 1.2.0: varias instancias (un gráfico por símbolo)
+    def test_multi_instance_state(self):
+        for sym, eq in (("XAUUSD", 10000.0), ("Volatility 75 Index", 10001.0)):
+            body = json.dumps({"equity": eq, "state": "RUNNING", "symbol": sym, "profile": "SINTETICO" if "Vol" in sym else "XAUUSD"})
+            self.assertEqual(self.ea("POST", "/api/ea/telemetry", body)[0], 200)
+        cookie, _ = self.login()
+        st, data, _ = self.req("GET", "/api/state?i=" + quote("Volatility 75 Index"), headers={"Cookie": cookie})
+        self.assertEqual(st, 200)
+        s = json.loads(data)
+        names = [i["instance"] for i in s["instances"]]
+        self.assertIn("XAUUSD", names)
+        self.assertIn("Volatility 75 Index", names)
+        self.assertEqual(s["instance"], "Volatility 75 Index")
+        self.assertEqual(s["telemetry"]["equity"], 10001.0)
+        self.assertEqual([i for i in s["instances"] if i["instance"] == "Volatility 75 Index"][0]["profile"], "SINTETICO")
+        st, data, _ = self.req("GET", "/api/state?i=XAUUSD", headers={"Cookie": cookie})
+        self.assertEqual(json.loads(data)["telemetry"]["equity"], 10000.0)
+        st, data, _ = self.req("GET", "/api/state?i=desconocida", headers={"Cookie": cookie})
+        self.assertIn(json.loads(data)["instance"], names)   # desconocida -> la más reciente
+
+    def test_targeted_commands_and_per_instance_ack(self):
+        v75, gold = "Volatility 75 Index", "XAUUSD"
+        for sym in (v75, gold):
+            self.assertEqual(self.ea("POST", "/api/ea/telemetry", json.dumps({"symbol": sym, "equity": 1}))[0], 200)
+        cookie, csrf = self.login()
+        h = {"Cookie": cookie, "X-XAD-CSRF": csrf}
+        st, data, _ = self.req("POST", "/api/command", json.dumps({"cmd": "PAUSE", "target": v75}), h)
+        self.assertEqual(st, 200, data)
+        only = json.loads(data)["id"]
+        st, data, _ = self.req("POST", "/api/command", json.dumps({"cmd": "SAFE_MODE"}), h)   # sin destino = todas
+        all_id = json.loads(data)["id"]
+        st, _, _ = self.req("POST", "/api/command", json.dumps({"cmd": "PAUSE", "target": "Crash 500 Index"}), h)
+        self.assertEqual(st, 400)                                                           # instancia desconocida
+        p_v75 = "/api/ea/commands?i=" + quote(v75)
+        p_gold = "/api/ea/commands?i=" + gold
+        ids = lambda d: {int(ln.split("|")[0]) for ln in d.splitlines() if ln}
+        self.assertTrue({only, all_id} <= ids(self.ea("GET", p_v75)[1]))
+        got = ids(self.ea("GET", p_gold)[1])
+        self.assertIn(all_id, got)
+        self.assertNotIn(only, got)                                                         # no era para el oro
+        self.assertEqual(self.ea("POST", "/api/ea/ack?i=" + gold, str(only))[0], 404)       # ni puede confirmarlo
+        self.assertEqual(self.ea("POST", "/api/ea/ack?i=" + gold, str(all_id))[0], 200)
+        self.assertNotIn(all_id, ids(self.ea("GET", p_gold)[1]))
+        self.assertIn(all_id, ids(self.ea("GET", p_v75)[1]))                                # V75 aún no lo confirmó
+        self.assertEqual(self.ea("POST", "/api/ea/ack?i=" + quote(v75), str(all_id))[0], 200)
+        hist = {c["id"]: c for c in json.loads(self.req("GET", "/api/state", headers={"Cookie": cookie})[1])["commands"]}
+        self.assertEqual(sorted(hist[all_id]["acks"]), sorted([gold, v75]))
+        self.assertEqual(hist[only]["target"], v75)
+
+    def test_instance_query_is_signed(self):
+        ts, nonce = str(int(self.clock())), secrets.token_hex(8)
+        sig = srv.sign(TOKEN, srv.ea_message(ts, nonce, "GET", "/api/ea/commands?i=XAUUSD", ""))
+        st, _, _ = self.req("GET", "/api/ea/commands?i=OTRA", "", {"X-XAD-Timestamp": ts, "X-XAD-Nonce": nonce, "X-XAD-Signature": sig})
+        self.assertEqual(st, 401)                                                           # instancia cambiada en tránsito
+
+    def test_migration_from_1_1_schema(self):
+        path = os.path.join(self.tmp, "old.sqlite3")
+        db = sqlite3.connect(path)
+        db.executescript("""
+            CREATE TABLE telemetry(ts INTEGER, received INTEGER, body TEXT);
+            CREATE TABLE commands(id INTEGER PRIMARY KEY AUTOINCREMENT, cmd TEXT, created INTEGER,
+                                  delivered INTEGER, acked INTEGER, requested_by TEXT);
+            INSERT INTO telemetry VALUES(1, 100, '{"symbol":"XAUUSD","equity":5}');
+            INSERT INTO commands(cmd, created, delivered, acked, requested_by) VALUES('PAUSE', 100, 0, 0, 'x');
+        """)
+        db.commit()
+        db.close()
+        st = srv.Store(path)
+        received, latest, inst = st.latest()
+        self.assertEqual((received, latest["equity"], inst), (100, 5, ""))                  # datos antiguos = instancia ""
+        self.assertEqual(st.command_history()[0][6], "*")                                   # comandos antiguos = todas
+        self.assertEqual(len(st.pending_commands(150)), 1)                                  # EA 1.1.x (sin ?i=) sigue recibiéndolos
 
     def test_commands_expire(self):
         cid = self.app.store.add_command("RESUME", "test", int(self.clock()) - srv.COMMAND_TTL_SEC - 5)

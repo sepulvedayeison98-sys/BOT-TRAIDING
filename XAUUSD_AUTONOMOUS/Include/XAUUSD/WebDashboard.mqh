@@ -14,6 +14,9 @@
 //|    OnTimer cada InpWebIntervalSec, nunca desde OnTick. Si el     |
 //|    servidor falla, el intervalo crece (hasta x10) para no        |
 //|    bloquear la gestión protectora con esperas repetidas.         |
+//|  - Varias instancias (un gráfico por símbolo, 1.2.0): cada una   |
+//|    se identifica con su símbolo en la consulta de comandos y en  |
+//|    la confirmación (?i=<símbolo>, dentro de la ruta firmada).    |
 //+------------------------------------------------------------------+
 #ifndef XAUUSD_WEBDASHBOARD_MQH
 #define XAUUSD_WEBDASHBOARD_MQH
@@ -37,6 +40,7 @@ private:
    int               m_failures;
    CLogger          *m_log;
    ulong             m_nonce_counter;
+   string            m_instance;
 
    static void       ToBytes(const string s, uchar &out[])
      {
@@ -69,6 +73,7 @@ public:
       m_last_cycle = 0;
       m_last_cmd_id = 0;
       m_failures = 0;
+      m_instance = "";
       m_log = NULL;
       m_nonce_counter = 0;
      }
@@ -199,6 +204,31 @@ public:
      }
 
    bool              Enabled(void) const     { return m_enabled; }
+   void              SetInstance(const string instance) { m_instance = instance; }
+   string            Instance(void) const    { return m_instance; }
+
+   //--- Codificación de URL (RFC 3986, bytes UTF-8; sin reservar solo A-Z a-z 0-9 - _ . ~)
+   static string     UrlEncode(const string s)
+     {
+      uchar b[];
+      ToBytes(s, b);
+      string out = "";
+      for(int i = 0; i < ArraySize(b); i++)
+        {
+         uchar c = b[i];
+         if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+            out += CharToString(c);
+         else
+            out += StringFormat("%%%02X", c);
+        }
+      return out;
+     }
+
+   //--- Ruta con la instancia (vacía = cliente anterior a 1.2.0: el servidor lo trata igual)
+   string            InstancePath(const string path) const
+     {
+      return (m_instance == "") ? path : path + "?i=" + UrlEncode(m_instance);
+     }
    long              LastCommandId(void) const { return m_last_cmd_id; }
    void              SetLastCommandId(const long id) { m_last_cmd_id = id; }
    int               Failures(void) const    { return m_failures; }
@@ -270,7 +300,7 @@ public:
       ArrayResize(ids, 0);
       ArrayResize(cmds, 0);
       string resp;
-      if(Request("GET", "/api/ea/commands", "", resp, why) != 200)
+      if(Request("GET", InstancePath("/api/ea/commands"), "", resp, why) != 200)
          return -1;
       string lines[];
       int n = StringSplit(resp, '\n', lines);
@@ -310,7 +340,7 @@ public:
    bool              Ack(const long id, string &why)
      {
       string resp;
-      bool ok = (Request("POST", "/api/ea/ack", IntegerToString(id), resp, why) == 200);
+      bool ok = (Request("POST", InstancePath("/api/ea/ack"), IntegerToString(id), resp, why) == 200);
       if(ok && id > m_last_cmd_id)
          m_last_cmd_id = id;
       return ok;

@@ -28,6 +28,7 @@ struct SMCConfig
    bool              use_order_block;
    bool              require_discount;    // compras solo en descuento / ventas en premium
    bool              allow_in_range;
+   bool              use_asia_range;      // rango asiático como liquidez (sin sentido en mercados 24/7 sin sesiones)
   };
 
 void SMCDefaultConfig(SMCConfig &c)
@@ -39,6 +40,7 @@ void SMCDefaultConfig(SMCConfig &c)
    c.use_order_block = true;
    c.require_discount = true;
    c.allow_in_range = true;
+   c.use_asia_range = true;
   }
 
 bool SMCValidateConfig(const SMCConfig &c, string &reason)
@@ -115,8 +117,8 @@ protected:
       double extra[];
       ArrayResize(extra, 2);
       extra[0] = leg_ext;
-      double ahi, alo;
-      bool asia = CPatterns::AsiaRange(s.m15, (int)(s.server_time - s.utc_time), ahi, alo);
+      double ahi = 0.0, alo = 0.0;
+      bool asia = m_cfg.use_asia_range && CPatterns::AsiaRange(s.m15, (int)(s.server_time - s.utc_time), ahi, alo);
       extra[1] = asia ? (lng ? ahi : alo) : 0.0;
       double tp = SelectTarget(s, dir, entry, extra);
       if(tp <= 0.0)

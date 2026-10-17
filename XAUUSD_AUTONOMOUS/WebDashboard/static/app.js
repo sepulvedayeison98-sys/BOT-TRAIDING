@@ -1,6 +1,8 @@
 // Dashboard web del XAUUSD Autonomous Trading System (sin dependencias).
 // Lee /api/state cada 10 s (pausa mientras la pestaña está oculta). Los comandos van con el
 // token CSRF de la sesión. window.XAD_DEMO (solo en la vista previa publicada) sustituye la API.
+// Con varias instancias del EA (un gráfico por símbolo) se elige cuál ver; los comandos van a
+// esa instancia o a todas.
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -14,6 +16,10 @@ let lastState = null;
 let range = 259200;
 let lastSeen = 0;
 let serverSkew = 0;
+let instance = null;      // instancia que se muestra (null = la que reportó por última vez)
+let cmdTarget = "one";    // "one" = la instancia mostrada, "all" = todas
+try { instance = localStorage.getItem("xad.instance"); } catch (e) { instance = null; }
+function rememberInstance(v) { try { localStorage.setItem("xad.instance", v); } catch (e) { /* sin almacenamiento */ } }
 
 // ---------- utilidades ----------
 const LOCALE = "es-CO";
@@ -131,7 +137,7 @@ function startPolling() { if (!timer) timer = setInterval(refresh, REFRESH_MS); 
 function stopPolling() { if (timer) { clearInterval(timer); timer = null; } }
 
 async function refresh() {
-  const r = await api("/api/state");
+  const r = await api("/api/state" + (instance !== null ? "?i=" + encodeURIComponent(instance) : ""));
   if (r.status === 401) return showLogin();
   if (r.status === 200) render(r.data);
   else text("refresh-note", "Sin conexión con el servidor del dashboard: reintentando cada 10 s");
@@ -153,6 +159,10 @@ const REGIME = {
 const STRUCT = { BULLISH: "Alcista", BEARISH: "Bajista", MIXED: "Mixta", UNKNOWN: "Sin datos" };
 const SESSION = { LONDON: "Sesión de Londres", NEWYORK: "Sesión de Nueva York", OVERLAP: "Londres + Nueva York", NONE: "Fuera de sesión" };
 const QUALITY = { HIGH: "Alta", MODERATE: "Moderada", DISCARD: "Descartada" };
+const PROFILE = { XAUUSD: "Oro", SINTETICO: "Índice sintético", SINTETICO_SPIKE: "Sintético con spikes" };
+const synthetic = (t) => t.uses_sessions === false;
+const priceDigits = (t) => (typeof t.digits === "number" ? Math.min(Math.max(t.digits, 0), 5) : 2);
+const portfolioPositions = (t) => (typeof t.portfolio_positions === "number" ? t.portfolio_positions : t.positions);
 
 // Bloqueos del EA ("CLAVE: detalle; ...") -> título comprensible, severidad e icono.
 const BLOCKS = [
@@ -185,9 +195,12 @@ function render(s) {
   serverSkew = (s.now || Date.now() / 1000) - Date.now() / 1000;
   lastSeen = s.last_seen || 0;
   const online = !!s.ea_online;
+  if (typeof s.instance === "string") instance = s.instance;
+  renderInstances(s);
 
   // cabecera
-  text("subtitle", t.symbol ? [t.symbol, (t.account_mode || "").replace("DEMO", "Demo").replace("REAL", "REAL"), t.run_tag ? "corrida " + t.run_tag : ""].filter(Boolean).join(" · ") : "Esperando el primer reporte del EA");
+  const side = t.only_dir === "BUY" ? "solo compras" : t.only_dir === "SELL" ? "solo ventas" : "";
+  text("subtitle", t.symbol ? [t.symbol, PROFILE[t.profile] || "", side, (t.account_mode || "").replace("DEMO", "Demo").replace("REAL", "REAL"), t.run_tag ? "corrida " + t.run_tag : ""].filter(Boolean).join(" · ") : "Esperando el primer reporte del EA");
   cls($("online"), "live", online ? "ok" : "off");
   text("online-text", online ? "En línea" : (t.symbol ? "Sin reportar" : "Sin datos"));
   text("time-server", t.time_server ? t.time_server.slice(11) : "—");
@@ -209,6 +222,28 @@ function render(s) {
   renderMarket(t);
   renderControl(s, t, online);
   text("refresh-note", `Actualiza cada 10 s · última lectura ${new Date().toLocaleTimeString(LOCALE, { hour12: false })}`);
+}
+
+function renderInstances(s) {
+  const list = s.instances || [];
+  const box = $("instances");
+  box.hidden = list.length < 2;
+  const wrap = $("inst-list");
+  wrap.replaceChildren();
+  if (list.length < 2) return;
+  list.forEach((i) => {
+    const b = el("button", { type: "button", class: "inst", "aria-pressed": i.instance === s.instance ? "true" : "false",
+      title: (i.online ? "En línea" : "Sin reportar") + (i.state ? " · " + ((STATE[i.state] || {}).label || i.state) : "") });
+    b.appendChild(el("i", { class: i.online ? "ok" : "" }));
+    b.appendChild(document.createTextNode(i.symbol || i.instance || "EA 1.1.x"));
+    if (i.state) b.appendChild(el("small", { text: (STATE[i.state] || {}).label || i.state }));
+    b.addEventListener("click", () => {
+      instance = i.instance;
+      rememberInstance(instance);
+      refresh();
+    });
+    wrap.appendChild(b);
+  });
 }
 
 function tick() {
@@ -273,7 +308,7 @@ function renderKpis(t) {
   // exposición
   const maxExp = t.max_exposure_pct || 2;
   text("exposure", num(t.exposure_pct));
-  text("exposure-sub", `riesgo abierto hasta el stop loss`);
+  text("exposure-sub", t.shared_portfolio ? "riesgo abierto de toda la cartera hasta el SL" : "riesgo abierto hasta el stop loss");
   const expRatio = (t.exposure_pct || 0) / maxExp;
   setMeter("exposure-meter", expRatio);
   text("exposure-foot", `máximo ${pct(maxExp)} · ${pct(t.risk_pct)} por operación`);
@@ -281,11 +316,14 @@ function renderKpis(t) {
 
   // posiciones
   const maxPos = t.max_positions || 3;
-  const n = typeof t.positions === "number" ? t.positions : 0;
-  text("positions", typeof t.positions === "number" ? t.positions : "—");
+  const pp = portfolioPositions(t);
+  const n = typeof pp === "number" ? pp : 0;
+  text("positions", typeof pp === "number" ? pp : "—");
   text("positions-max", `/ ${maxPos}`);
   const openPl = (t.open_positions || []).reduce((a, p) => a + (p.profit || 0), 0);
-  text("positions-sub", n ? `P/L flotante ${signed(openPl)} ${cur}` : "sin posiciones abiertas");
+  const others = typeof t.positions === "number" ? n - t.positions : 0;
+  text("positions-sub", others > 0 ? `${t.positions} en ${t.symbol}, ${others} en otros símbolos`
+    : n ? `P/L flotante ${signed(openPl)} ${cur}` : "sin posiciones abiertas");
   const slots = $("slots");
   slots.replaceChildren();
   for (let i = 0; i < maxPos; i++) slots.appendChild(el("i", { class: i < n ? "on" : "" }));
@@ -410,15 +448,16 @@ function renderPositions(t) {
   const rows = t.open_positions || [];
   const tbody = document.querySelector("#positions-table tbody");
   tbody.replaceChildren();
+  const d = priceDigits(t);
   rows.forEach((p) => {
     const pl = el("td", { class: "num " + (p.profit > 0 ? "pos" : p.profit < 0 ? "neg" : ""), text: signed(p.profit) });
     tbody.appendChild(el("tr", {}, [
       el("td", { class: "num", text: String(p.ticket) }),
       el("td", {}, [el("span", { class: "dir " + (p.dir === "BUY" ? "buy" : "sell"), text: p.dir === "BUY" ? "COMPRA" : "VENTA" })]),
-      el("td", { class: "num", text: num(p.volume) }),
-      el("td", { class: "num", text: num(p.open) }),
-      el("td", { class: "num", text: p.sl > 0 ? num(p.sl) : "sin SL" }),
-      el("td", { class: "num", text: p.tp > 0 ? num(p.tp) : "—" }),
+      el("td", { class: "num", text: num(p.volume, Math.abs(p.volume * 100 - Math.round(p.volume * 100)) > 1e-6 ? 3 : 2) }),
+      el("td", { class: "num", text: num(p.open, d) }),
+      el("td", { class: "num", text: p.sl > 0 ? num(p.sl, d) : "sin SL" }),
+      el("td", { class: "num", text: p.tp > 0 ? num(p.tp, d) : "—" }),
       pl,
     ]));
   });
@@ -440,8 +479,8 @@ function renderDecision(t) {
     setMeter("score-meter", 0, false);
   }
   const tag = $("decision-tag");
-  tag.hidden = !t.session;
-  tag.textContent = SESSION[t.session] || "";
+  tag.hidden = !t.session && !synthetic(t);
+  tag.textContent = synthetic(t) ? "24/7" : SESSION[t.session] || "";
 }
 
 function ruleRow(name, note, actual, limit, ratio, status) {
@@ -476,22 +515,24 @@ function renderRisk(t) {
   const riskR = (t.risk_pct || 0) / 2;
   tbody.appendChild(ruleRow("Riesgo por operación", "pérdida máxima si toca el stop loss", pct(t.risk_pct), "2,00 % (tope duro)", riskR, statusFor(riskR, 1.0001)));
   const expR = (t.exposure_pct || 0) / maxExp;
-  tbody.appendChild(ruleRow("Exposición agregada", "suma del riesgo abierto de sus posiciones", pct(t.exposure_pct), pct(maxExp), expR, statusFor(expR)));
-  const posR = (t.positions || 0) / maxPos;
-  tbody.appendChild(ruleRow("Posiciones simultáneas", "en Netting el máximo es 1", String(t.positions ?? "—"), String(maxPos), posR, statusFor(posR)));
+  tbody.appendChild(ruleRow("Exposición agregada", t.shared_portfolio ? "riesgo abierto de todos los símbolos con la misma magic" : "suma del riesgo abierto de sus posiciones", pct(t.exposure_pct), pct(maxExp), expR, statusFor(expR)));
+  const pp = portfolioPositions(t);
+  const posR = (pp || 0) / maxPos;
+  tbody.appendChild(ruleRow("Posiciones simultáneas", t.shared_portfolio ? "toda la cartera; en Netting, 1 por símbolo" : "en Netting el máximo es 1", String(pp ?? "—"), String(maxPos), posR, statusFor(posR)));
   const lossR = t.daily_limit_pct > 0 ? (t.daily_loss_pct || 0) / t.daily_limit_pct : 0;
   tbody.appendChild(ruleRow("Pérdida diaria", t.daily_scope === "ACCOUNT" ? "toda la cuenta" : "solo operaciones del EA", pct(t.daily_loss_pct), pct(t.daily_limit_pct), lossR, statusFor(lossR)));
   tbody.appendChild(ruleRow("Relación riesgo/beneficio", "mínimo exigido a cada operación", typeof t.min_rr === "number" ? "1 : " + num(t.min_rr, 1) : "—", "1 : 2,0 o más", null, ["Regla fija", "neutral", "i-info"]));
   tbody.appendChild(ruleRow("Drawdown", "caída desde el máximo de equity", pct(t.drawdown_pct), "—", null, ["Informativo", "neutral", "i-info"]));
   const ea = t.daily_scope !== "ACCOUNT";
   text("scope-tag", ea ? "Pérdida diaria: solo EA" : "Pérdida diaria: toda la cuenta");
-  text("scope-text", ea
+  text("scope-text", (ea
     ? "La pérdida diaria cuenta solo las operaciones del EA (su número mágico). Tus operaciones manuales u otros robots en la misma cuenta no consumen este límite, así que la cuenta completa puede perder más en un día. Se reinicia a la hora configurada del servidor."
-    : "La pérdida diaria cuenta todas las operaciones de la cuenta, incluidas las manuales y las de otros robots. Se reinicia a la hora configurada del servidor.");
+    : "La pérdida diaria cuenta todas las operaciones de la cuenta, incluidas las manuales y las de otros robots. Se reinicia a la hora configurada del servidor.")
+    + (t.shared_portfolio ? " Los gráficos de otros símbolos con la misma magic comparten estos límites: exposición, posiciones y pérdida diaria son de toda la cartera." : ""));
 }
 
 function renderMarket(t) {
-  text("session-tag", SESSION[t.session] || "Sesión sin datos");
+  text("session-tag", synthetic(t) ? "24/7 · sin filtro de sesión" : SESSION[t.session] || "Sesión sin datos");
   const [rName, rCls] = REGIME[t.regime] || [t.regime || "—", ""];
   const rEl = $("regime");
   rEl.textContent = rName;
@@ -512,7 +553,7 @@ function renderMarket(t) {
   if (typeof t.spread === "number") {
     const avg = t.spread_avg || t.spread;
     const scale = Math.max(avg * 2, t.spread, 1);
-    text("spread", `${num(t.spread, 0)} pts`);
+    text("spread", `${num(t.spread, 0)} pts` + (typeof t.spread_max === "number" ? ` · máx ${num(t.spread_max, 0)}` : ""));
     const bar = $("spread-bar");
     bar.style.width = Math.min(100, t.spread / scale * 100).toFixed(1) + "%";
     bar.className = t.spread > avg * 1.5 ? "warning" : "";
@@ -521,7 +562,7 @@ function renderMarket(t) {
   } else {
     text("spread", "—"); text("spread-note", "Sin datos de mercado todavía");
   }
-  text("atr", typeof t.atr_m15 === "number" ? `${num(t.atr_m15, 2)} USD` : "—");
+  text("atr", typeof t.atr_m15 === "number" ? (synthetic(t) ? `${num(t.atr_m15, priceDigits(t))} (precio)` : `${num(t.atr_m15, 2)} USD`) : "—");
 
   if (typeof t.rsi_m15 === "number") {
     text("rsi", num(t.rsi_m15, 1));
@@ -530,6 +571,14 @@ function renderMarket(t) {
   } else { text("rsi", "—"); text("rsi-note", "—"); }
 
   const card = $("news-card");
+  if (t.uses_news === false) {
+    card.className = "card news-card";
+    text("news-state", "No aplica");
+    text("news-next", "Los índices sintéticos los genera el bróker con un algoritmo: no dependen de noticias económicas.");
+    text("news-note", "El filtro de noticias USD solo se usa en XAUUSD.");
+    return;
+  }
+  text("news-note", "Bloqueo de ±30 min en CPI, NFP, FOMC, PCE y tasas; ±20 min en otros eventos USD.");
   card.className = "card news-card" + (t.news_blocked ? " blocked" : "");
   text("news-state", t.news_blocked ? "Bloqueo activo" : "Libre");
   text("news-next", t.news_blocked
@@ -538,9 +587,25 @@ function renderMarket(t) {
 }
 
 function renderControl(s, t, online) {
-  const st = (t.state || "").toUpperCase();
+  const insts = s.instances || [];
+  const multi = insts.length > 1;
+  $("cmd-target").hidden = !multi;
+  if (!multi) cmdTarget = "one";
+  document.querySelectorAll("#target-seg button").forEach((b) => b.classList.toggle("on", b.dataset.target === cmdTarget));
+  text("target-one", t.symbol || "Esta instancia");
+  text("target-note", cmdTarget === "all"
+    ? `Se envía a las ${insts.length} instancias; cada una lo aplica según su propio estado.`
+    : `Solo lo aplica ${t.symbol || "esta instancia"}.`);
+  const all = multi && cmdTarget === "all";
+  const states = all ? insts.map((i) => (i.state || "").toUpperCase()) : [(t.state || "").toUpperCase()];
+  const st = states[0];
   const allowed = !!s.allow_commands;
-  const rules = {
+  const any = (f) => states.some(f);
+  const rules = all ? {
+    PAUSE: [any((x) => x === "RUNNING"), any((x) => x === "RUNNING") ? "Disponible: pausa las instancias que están operando." : "Ninguna instancia está operando."],
+    RESUME: [any((x) => x === "PAUSED"), any((x) => x === "PAUSED") ? "Disponible: reanuda las instancias en pausa." : "Ninguna instancia está en pausa."],
+    SAFE_MODE: [any((x) => x !== "SAFE_MODE" && x !== "HALTED"), "Disponible siempre."],
+  } : {
     PAUSE: [st === "RUNNING", st === "RUNNING" ? "Disponible: el EA está operando." : `Sin efecto ahora: el EA está en ${STATE[st] ? STATE[st].label.toLowerCase() : st || "estado desconocido"}.`],
     RESUME: [st === "PAUSED", st === "PAUSED" ? "Disponible: el EA está en pausa." : "Solo actúa cuando el EA está en pausa."],
     SAFE_MODE: [st !== "SAFE_MODE" && st !== "HALTED", st === "SAFE_MODE" ? "Ya está en modo seguro." : "Disponible siempre."],
@@ -558,13 +623,16 @@ function renderControl(s, t, online) {
   const names = { PAUSE: "Pausar entradas", RESUME: "Reanudar entradas", SAFE_MODE: "Modo seguro" };
   rows.forEach((r) => {
     let status;
-    if (r.acked) status = chip("Aplicado " + fmtTime(r.acked, false), "good", "i-check");
+    const acks = r.acks || [];
+    if (r.acked && multi && (r.target || "*") === "*") status = chip(`Aplicado ${acks.length} de ${insts.length}`, acks.length >= insts.length ? "good" : "warning", acks.length >= insts.length ? "i-check" : "i-clock");
+    else if (r.acked) status = chip("Aplicado " + fmtTime(r.acked, false), "good", "i-check");
     else if (now - r.created > COMMAND_TTL) status = chip("Caducado", "neutral");
     else if (r.delivered) status = chip("Entregado, sin confirmar", "warning", "i-clock");
     else status = chip("En cola", "neutral", "i-clock");
     tbody.appendChild(el("tr", {}, [
       el("td", { class: "num", text: String(r.id) }),
       el("td", { text: names[r.cmd] || r.cmd }),
+      el("td", { text: (r.target || "*") === "*" ? "Todas" : r.target }),
       el("td", { text: fmtTime(r.created) }),
       el("td", {}, [status]),
     ]));
@@ -589,6 +657,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     range = Number(b.dataset.range);
     document.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", x === b));
     if (lastState) renderChart(lastState.equity || []);
+  }));
+  document.querySelectorAll("#target-seg button").forEach((b) => b.addEventListener("click", () => {
+    cmdTarget = b.dataset.target;
+    if (lastState) renderControl(lastState, lastState.telemetry || {}, !!lastState.ea_online);
   }));
   $("toggle-table").addEventListener("click", () => {
     const w = $("equity-table-wrap");
@@ -617,13 +689,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
   document.querySelectorAll("#actions button").forEach((b) => b.addEventListener("click", () => {
     pendingCmd = b.dataset.cmd;
-    text("confirm-text", `Vas a ${labels[pendingCmd]} El EA lo aplica en su siguiente reporte (unos 30 s).`);
+    const multi = lastState && (lastState.instances || []).length > 1;
+    const who = !multi ? "" : cmdTarget === "all" ? "Todas las instancias: v" : `${(lastState.telemetry || {}).symbol || "Esta instancia"}: v`;
+    text("confirm-text", `${who || "V"}as a ${labels[pendingCmd]} El EA lo aplica en su siguiente reporte (unos 30 s).`);
     $("confirm-ok").className = "btn " + (pendingCmd === "SAFE_MODE" ? "btn-danger" : pendingCmd === "PAUSE" ? "btn-warning" : "btn-primary");
     $("confirm").showModal();
   }));
   $("confirm").addEventListener("close", async () => {
     if ($("confirm").returnValue !== "ok" || !pendingCmd) { pendingCmd = null; return; }
-    const r = await api("/api/command", { method: "POST", body: JSON.stringify({ cmd: pendingCmd }) });
+    const multi = lastState && (lastState.instances || []).length > 1;
+    const target = multi && cmdTarget === "one" && typeof instance === "string" ? instance : "*";
+    const r = await api("/api/command", { method: "POST", body: JSON.stringify({ cmd: pendingCmd, target }) });
     const msg = $("cmd-msg");
     if (r.status === 200) { msg.textContent = `Comando #${r.data.id} en cola. Su estado aparece en el historial.`; msg.className = "cmd-msg ok"; }
     else { msg.textContent = r.data.error || "No se pudo enviar el comando."; msg.className = "cmd-msg err"; }

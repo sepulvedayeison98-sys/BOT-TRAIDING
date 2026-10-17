@@ -120,6 +120,19 @@ public:
       return false;
      }
 
+   //--- Umbrales de coste en puntos (perfiles sintéticos: se recalculan con el ATR en cada vela)
+   bool              SetCostLimits(const int max_spread_points, const int deviation_points, const int max_entry_drift_points)
+     {
+      if(max_spread_points <= 0 || deviation_points < 0 || max_entry_drift_points < 0)
+         return false;
+      m_cfg.max_spread_points = max_spread_points;
+      m_cfg.deviation_points = deviation_points;
+      m_cfg.max_entry_drift_points = max_entry_drift_points;
+      return true;
+     }
+
+   ExecutionConfig   Config(void) const { return m_cfg; }
+
    static ENUM_RETCODE_CLASS Classify(const uint rc, const bool send_ok)
      {
       switch(rc)
@@ -175,7 +188,7 @@ public:
       if(!m_gw.TradeAllowed(why))         { r.message = why; return r; }
       if(!m_gw.MarketOpen(m_symbol, why)) { r.message = why; return r; }
       if(d.volume < spec.volume_min || d.volume > spec.volume_max)
-        { r.message = StringFormat("volumen %.2f fuera de [%.2f, %.2f]", d.volume, spec.volume_min, spec.volume_max); return r; }
+        { r.message = StringFormat("volumen %g fuera de [%g, %g]", d.volume, spec.volume_min, spec.volume_max); return r; }
       double steps = d.volume / spec.volume_step;
       if(MathAbs(steps - MathRound(steps)) > 1e-6)
         { r.message = StringFormat("volumen %.4f no es múltiplo del paso %.4f", d.volume, spec.volume_step); return r; }

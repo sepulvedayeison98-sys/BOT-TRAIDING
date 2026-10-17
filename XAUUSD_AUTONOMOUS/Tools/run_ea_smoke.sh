@@ -10,6 +10,8 @@
 # SMOKE_WEB=1: además arranca WebDashboard/server.py en 127.0.0.1:8080 con un token temporal,
 #   encola un PAUSE y verifica telemetría, aplicación del comando, confirmación y persistencia
 #   (requiere http://127.0.0.1:8080 permitida para WebRequest en este terminal; ver run_web_e2e.sh).
+# SMOKE_PROFILE=synth: el mismo símbolo con el perfil de índice sintético forzado (InpProfile=2,
+#   permitido por InpAllowAnySymbol): sin filtro de sesión ni de noticias y costes relativos al ATR.
 set -u
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export WINEPREFIX="${WINEPREFIX:-/root/.wine-mt5}" WINEDEBUG=-all DISPLAY="${DISPLAY:-:99}"
@@ -36,6 +38,8 @@ mkdir -p "$MT_DIR/MQL5/Experts/XAUUSD" "$MT_DIR/MQL5/Scripts/XAUUSD_Tests" "$MT_
 cp Experts/XAUUSD_Autonomous.ex5 "$MT_DIR/MQL5/Experts/XAUUSD/"
 cp Tests/StressTests/FeedTicksSmoke.ex5 "$MT_DIR/MQL5/Scripts/XAUUSD_Tests/"
 printf 'InpAllowAnySymbol=true\r\nInpSymbolOverride=XAUSYN\r\nInpRunTag=smoke\r\nInpShowDashboard=true\r\n' > "$MT_DIR/MQL5/Presets/xau_smoke.set"
+PROFILE="${SMOKE_PROFILE:-}"
+[ "$PROFILE" = "synth" ] && printf 'InpProfile=2\r\n' >> "$MT_DIR/MQL5/Presets/xau_smoke.set"
 WEB="${SMOKE_WEB:-0}"
 if [ "$WEB" = "1" ]; then
   WORK="$(mktemp -d)"
@@ -103,6 +107,14 @@ if [ "$RESTART" = "1" ]; then
     check "reinicio: pausa restaurada" "grep -q 'restaurado: entradas pausadas' \"$LOG\""
     check "reinicio: entradas bloqueadas por PAUSED" "grep -P '\tBAR\t' \"$LOG\" | grep -q 'ESTADO PAUSED'"
   fi
+fi
+if [ "$PROFILE" = "synth" ]; then
+  check "sintético: perfil SINTETICO aplicado" "grep -P '\tPROFILE\t' \"$LOG\" | grep -q 'perfil SINTETICO'"
+  check "sintético: ningún bloqueo por sesión" "! grep -P '\tBAR\t' \"$LOG\" | grep -q 'SESIÓN'"
+  check "sintético: ningún bloqueo por noticias" "! grep -P '\tBAR\t' \"$LOG\" | grep -q 'NOTICIAS'"
+  check "sintético: límites de coste calculados con el ATR" "grep -q 'COST_LIMITS' \"$LOG\""
+else
+  check "XAUUSD: perfil del oro" "grep -P '\tPROFILE\t' \"$LOG\" | grep -q 'perfil XAUUSD'"
 fi
 [ "$EDIT" = "corrupt" ] || check "sin errores críticos" "[ $(grep -c $'\tCRITICAL\t' "$LOG") -eq 0 ]"
 if [ "$WEB" = "1" ]; then

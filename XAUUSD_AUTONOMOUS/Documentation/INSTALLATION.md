@@ -41,13 +41,17 @@ Compilar cada `.mq5` en MetaEditor (F7). Resultado esperado: `0 errors, 0 warnin
 | Riesgo | `InpRiskPct` / `InpMaxExposurePct` / `InpMaxPositions` / `InpDailyLossPct` / `InpMinRR` | 1 % / 2 % / 3 / 3 % / 2.0 |
 | Riesgo | `InpDailyResetHour` | 0 (hora del servidor) |
 | Riesgo | `InpDailyLossScope` | solo operaciones del EA (alternativa: toda la cuenta) |
+| Riesgo | `InpSharedPortfolio` | sí: los gráficos con la misma magic comparten exposición, posiciones y pérdida diaria |
+| Instrumento | `InpProfile` | automático según el símbolo (XAUUSD, Volatility/Step/Jump, Boom/Crash) |
+| Instrumento | `InpAllowSpikeIndices` / `InpSpikeSideOnly` | false / true (Boom/Crash experimental, solo en la dirección del spike) |
 | Seguridad | `InpAllowRealAccount` / `InpRealAccountConfirmation` | false / vacío |
 | Posiciones | break-even / trailing | 1.0R / 1.5R (ATR M5 × 1.5) |
 | Noticias | mayores / USD / bloqueo si no verificable | 30/30 min, 20/20 min, sí |
 | Sesiones | Londres / Nueva York (hora local de cada plaza) | 08:00–16:30 / 08:00–17:00 |
 
 3. El panel muestra estado, régimen, señales, riesgo, exposición, pérdida diaria, noticias y **motivos de bloqueo**. Botones: pausar/reanudar entradas, modo seguro, salir de modo seguro (doble clic), cerrar todo (doble clic), ver registros.
-4. Valores fuera de los límites duros (riesgo > 2 %, exposición > 5 %, pérdida diaria > 6 %, R:R < 1, posiciones > 5) impiden que el EA arranque.
+4. **Índices sintéticos**: el mismo EA en un gráfico de Volatility 75, Step, Jump, o Boom/Crash si activas el perfil experimental. Un gráfico por símbolo, todos con la misma magic. Antes de usarlo lee [SYNTHETIC_INDICES.md](SYNTHETIC_INDICES.md): perfiles, costes relativos al ATR, cartera compartida y pasos en la demo.
+5. Valores fuera de los límites duros (riesgo > 2 %, exposición > 5 %, pérdida diaria > 6 %, R:R < 1, posiciones > 5) impiden que el EA arranque.
 
 ## 5. Strategy Tester
 - Experto `XAUUSD\XAUUSD_Autonomous`, símbolo XAUUSD de Deriv, periodo M5, modelo **"Cada tick basado en ticks reales"** si Deriv provee ticks; si no, "OHLC en M1" (menos realista).

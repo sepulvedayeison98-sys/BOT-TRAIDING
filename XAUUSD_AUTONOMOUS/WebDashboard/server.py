@@ -12,6 +12,9 @@ Seguridad:
   - Los comandos que el EA recoge van firmados por el servidor con el mismo token;
     el EA los verifica (y rechaza los viejos o repetidos).
   - Solo existen PAUSE, RESUME y SAFE_MODE. Nunca abrir/cerrar operaciones ni tocar riesgo.
+  - Varias instancias del EA (un gráfico por símbolo): cada telemetría se guarda con su
+    símbolo; un comando va a una instancia o a todas ("*") y cada instancia lo confirma por
+    separado (?i=<símbolo> en la ruta firmada). Un EA anterior a 1.2.0 es la instancia "".
   - La persona entra con contraseña (hash PBKDF2-SHA256) -> cookie de sesión firmada,
     HttpOnly, SameSite=Strict (Secure detrás de TLS) + protección CSRF por doble envío.
   - Límite de intentos de login por IP, cabeceras de seguridad (CSP sin scripts inline),
@@ -33,7 +36,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 ALLOWED_COMMANDS = ("PAUSE", "RESUME", "SAFE_MODE")
 MAX_SKEW_SEC = 120
@@ -42,6 +45,8 @@ SESSION_TTL_SEC = 12 * 3600
 LOGIN_MAX_PER_MIN = 5
 EA_ONLINE_SEC = 120
 COMMAND_TTL_SEC = 600
+INSTANCE_MAX_LEN = 64
+INSTANCE_LIST_SEC = 7 * 86400     # instancias que se listan (vistas en los últimos 7 días)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".woff2": "font/woff2"}
@@ -116,7 +121,16 @@ class Store:
             CREATE TABLE IF NOT EXISTS commands(id INTEGER PRIMARY KEY AUTOINCREMENT, cmd TEXT, created INTEGER,
                                                 delivered INTEGER, acked INTEGER, requested_by TEXT);
             CREATE TABLE IF NOT EXISTS audit(ts INTEGER, actor TEXT, action TEXT, detail TEXT);
+            CREATE TABLE IF NOT EXISTS command_acks(cmd_id INTEGER, instance TEXT, ts INTEGER, PRIMARY KEY(cmd_id, instance));
         """)
+        # migración desde 1.1.x: instancia en la telemetría y destino en los comandos
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(telemetry)")}
+        if "instance" not in cols:
+            self.db.execute("ALTER TABLE telemetry ADD COLUMN instance TEXT NOT NULL DEFAULT ''")
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(commands)")}
+        if "target" not in cols:
+            self.db.execute("ALTER TABLE commands ADD COLUMN target TEXT NOT NULL DEFAULT '*'")
+        self.db.execute("CREATE INDEX IF NOT EXISTS telemetry_inst ON telemetry(instance, received)")
         self.db.commit()
 
     def use_nonce(self, nonce, now):
@@ -129,25 +143,48 @@ class Store:
             except sqlite3.IntegrityError:
                 return False
 
-    def add_telemetry(self, ts, body, now):
+    def add_telemetry(self, ts, body, now, instance=""):
         with self.lock:
-            self.db.execute("INSERT INTO telemetry(ts, received, body) VALUES(?, ?, ?)", (ts, now, body))
+            self.db.execute("INSERT INTO telemetry(ts, received, body, instance) VALUES(?, ?, ?, ?)", (ts, now, body, instance))
             self.db.execute("DELETE FROM telemetry WHERE received < ?", (now - 30 * 86400,))
             self.db.commit()
 
-    def latest(self):
+    def latest(self, instance=None):
+        """Último reporte de una instancia (None = el más reciente de cualquiera)."""
         with self.lock:
-            row = self.db.execute("SELECT received, body FROM telemetry ORDER BY received DESC, rowid DESC LIMIT 1").fetchone()
-        return (row[0], json.loads(row[1])) if row else (0, None)
+            if instance is None:
+                row = self.db.execute("SELECT received, body, instance FROM telemetry "
+                                      "ORDER BY received DESC, rowid DESC LIMIT 1").fetchone()
+            else:
+                row = self.db.execute("SELECT received, body, instance FROM telemetry WHERE instance = ? "
+                                      "ORDER BY received DESC, rowid DESC LIMIT 1", (instance,)).fetchone()
+        return (row[0], json.loads(row[1]), row[2]) if row else (0, None, instance if instance is not None else "")
 
-    def equity_series(self, since, now, buckets=720):
+    def instances(self, now):
+        """Instancias vistas en los últimos 7 días con un resumen de su último reporte."""
+        with self.lock:
+            rows = self.db.execute("SELECT instance, MAX(received), body FROM telemetry WHERE received >= ? "
+                                   "GROUP BY instance ORDER BY instance", (now - INSTANCE_LIST_SEC,)).fetchall()
+        out = []
+        for inst, received, body in rows:
+            try:
+                t = json.loads(body)
+            except ValueError:
+                t = {}
+            out.append({"instance": inst, "last_seen": received, "online": now - received <= EA_ONLINE_SEC,
+                        "symbol": t.get("symbol", inst), "state": t.get("state", ""), "profile": t.get("profile", ""),
+                        "daily_loss_pct": t.get("daily_loss_pct"), "positions": t.get("positions")})
+        return out
+
+    def equity_series(self, since, now, buckets=720, instance=None):
         # Un punto por intervalo (el último reporte de cada uno): ~720 puntos cubren la ventana
         # completa sea cual sea la frecuencia de telemetría. En SQLite, con MAX() las columnas
         # no agregadas toman los valores de la fila del máximo.
         step = max(1, (now - since) // buckets)
+        where, args = ("received >= ?", [since]) if instance is None else ("received >= ? AND instance = ?", [since, instance])
         with self.lock:
-            rows = self.db.execute("SELECT MAX(received), body FROM telemetry WHERE received >= ? "
-                                   "GROUP BY received / ? ORDER BY 1", (since, step)).fetchall()
+            rows = self.db.execute(f"SELECT MAX(received), body FROM telemetry WHERE {where} "
+                                   "GROUP BY received / ? ORDER BY 1", (*args, step)).fetchall()
         out = []
         for received, body in rows:
             try:
@@ -158,33 +195,47 @@ class Store:
                 continue
         return out
 
-    def add_command(self, cmd, actor, now):
+    def add_command(self, cmd, actor, now, target="*"):
         with self.lock:
-            cur = self.db.execute("INSERT INTO commands(cmd, created, delivered, acked, requested_by) VALUES(?, ?, 0, 0, ?)",
-                                  (cmd, now, actor))
-            self.db.execute("INSERT INTO audit(ts, actor, action, detail) VALUES(?, ?, 'command', ?)", (now, actor, cmd))
+            cur = self.db.execute("INSERT INTO commands(cmd, created, delivered, acked, requested_by, target) "
+                                  "VALUES(?, ?, 0, 0, ?, ?)", (cmd, now, actor, target))
+            self.db.execute("INSERT INTO audit(ts, actor, action, detail) VALUES(?, ?, 'command', ?)",
+                            (now, actor, cmd if target == "*" else f"{cmd} -> {target}"))
             self.db.commit()
             return cur.lastrowid
 
-    def pending_commands(self, now):
+    # Pendientes para una instancia: vigentes, dirigidos a ella o a todas, y que ELLA no ha confirmado.
+    _PENDING = ("FROM commands c WHERE c.created >= ? AND (c.target = '*' OR c.target = ?) AND NOT EXISTS "
+                "(SELECT 1 FROM command_acks a WHERE a.cmd_id = c.id AND a.instance = ?)")
+
+    def pending_commands(self, now, instance=""):
+        args = (now - COMMAND_TTL_SEC, instance, instance)
         with self.lock:
-            rows = self.db.execute("SELECT id, cmd, created FROM commands WHERE acked = 0 AND created >= ? ORDER BY id",
-                                   (now - COMMAND_TTL_SEC,)).fetchall()
-            self.db.execute("UPDATE commands SET delivered = delivered + 1 WHERE acked = 0 AND created >= ?",
-                            (now - COMMAND_TTL_SEC,))
+            rows = self.db.execute("SELECT c.id, c.cmd, c.created " + self._PENDING + " ORDER BY c.id", args).fetchall()
+            self.db.execute("UPDATE commands SET delivered = delivered + 1 WHERE id IN (SELECT c.id " + self._PENDING + ")", args)
             self.db.commit()
         return rows
 
-    def ack(self, cid, now):
+    def ack(self, cid, now, instance=""):
+        """Confirmación de una instancia (idempotente). False si el comando no existe o no era para ella."""
         with self.lock:
-            cur = self.db.execute("UPDATE commands SET acked = ? WHERE id = ? AND acked = 0", (now, cid))
+            row = self.db.execute("SELECT target FROM commands WHERE id = ?", (cid,)).fetchone()
+            if not row or row[0] not in ("*", instance):
+                return False
+            self.db.execute("INSERT OR IGNORE INTO command_acks(cmd_id, instance, ts) VALUES(?, ?, ?)", (cid, instance, now))
+            self.db.execute("UPDATE commands SET acked = ? WHERE id = ? AND acked = 0", (now, cid))
             self.db.commit()
-            return cur.rowcount == 1
+            return True
 
     def command_history(self, limit=20):
         with self.lock:
-            return self.db.execute("SELECT id, cmd, created, delivered, acked, requested_by FROM commands ORDER BY id DESC LIMIT ?",
-                                   (limit,)).fetchall()
+            rows = self.db.execute("SELECT id, cmd, created, delivered, acked, requested_by, target FROM commands "
+                                   "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            acks = {}
+            for cid, inst in self.db.execute("SELECT cmd_id, instance FROM command_acks WHERE cmd_id >= ? ORDER BY ts",
+                                             (rows[-1][0] if rows else 0,)):
+                acks.setdefault(cid, []).append(inst)
+        return [r + (acks.get(r[0], []),) for r in rows]
 
     def audit(self, actor, action, detail, now):
         with self.lock:
@@ -248,16 +299,23 @@ class App:
             attempts.append(now)
             return True
 
-    def state(self):
-        received, latest = self.store.latest()
+    def state(self, instance=None):
+        """Estado de una instancia (None = la que reportó por última vez) + lista de instancias."""
         now = self.now()
+        instances = self.store.instances(now)
+        if instance is not None and not any(i["instance"] == instance for i in instances):
+            instance = None   # instancia desconocida o antigua: se muestra la más reciente
+        received, latest, selected = self.store.latest(instance)
         return {
             "now": now,
+            "instance": selected,
+            "instances": instances,
             "ea_online": bool(latest) and now - received <= EA_ONLINE_SEC,
             "last_seen": received,
             "telemetry": latest,
-            "equity": self.store.equity_series(now - 3 * 86400, now),
-            "commands": [{"id": r[0], "cmd": r[1], "created": r[2], "delivered": r[3], "acked": r[4], "by": r[5]}
+            "equity": self.store.equity_series(now - 3 * 86400, now, instance=selected if latest else None),
+            "commands": [{"id": r[0], "cmd": r[1], "created": r[2], "delivered": r[3], "acked": r[4], "by": r[5],
+                          "target": r[6], "acks": r[7]}
                          for r in self.store.command_history()],
             "allow_commands": self.cfg.allow_commands,
             "allowed": list(ALLOWED_COMMANDS),
@@ -315,6 +373,10 @@ def make_handler(app):
                     return v
             return ""
 
+        def instance_param(self):
+            q = parse_qs(urlparse(self.path).query)
+            return q["i"][0][:INSTANCE_MAX_LEN] if "i" in q else ""
+
         def client_ip(self):
             if app.cfg.trust_proxy:
                 fwd = self.headers.get("X-Forwarded-For", "")
@@ -335,17 +397,20 @@ def make_handler(app):
                 self.close_connection = True   # un GET con cuerpo no leído no debe reutilizar la conexión
             path = urlparse(self.path).path
             if path == "/api/ea/commands":
-                err = app.verify_ea(self.headers, "GET", path, "")
+                # la firma cubre la ruta completa tal como llegó (con ?i=<instancia> desde 1.2.0)
+                err = app.verify_ea(self.headers, "GET", self.path, "")
                 if err:
                     return self.send(401, err, "text/plain; charset=utf-8")
                 now = app.now()
+                inst = self.instance_param()
                 lines = [f"{cid}|{cmd}|{created}|{sign(app.cfg.token, command_message(cid, cmd, created))}"
-                         for cid, cmd, created in app.store.pending_commands(now)] if app.cfg.allow_commands else []
+                         for cid, cmd, created in app.store.pending_commands(now, inst)] if app.cfg.allow_commands else []
                 return self.send(200, "\n".join(lines), "text/plain; charset=utf-8")
             if path == "/api/state":
                 if self.session_csrf() is None:
                     return self.json(401, {"error": "no autenticado"})
-                return self.json(200, app.state())
+                q = parse_qs(urlparse(self.path).query)
+                return self.json(200, app.state(q["i"][0][:INSTANCE_MAX_LEN] if "i" in q else None))
             if path == "/api/session":
                 csrf = self.session_csrf()
                 return self.json(200, {"authenticated": csrf is not None, "csrf": csrf or ""})
@@ -367,11 +432,11 @@ def make_handler(app):
             if body is None:
                 return self.send(413, "petición demasiado grande", "text/plain; charset=utf-8")
             if path in ("/api/ea/telemetry", "/api/ea/ack"):
-                err = app.verify_ea(self.headers, "POST", path, body)
+                err = app.verify_ea(self.headers, "POST", self.path, body)
                 if err:
                     return self.send(401, err, "text/plain; charset=utf-8")
                 if path == "/api/ea/ack":
-                    ok = body.strip().isdigit() and app.store.ack(int(body.strip()), app.now())
+                    ok = body.strip().isdigit() and app.store.ack(int(body.strip()), app.now(), self.instance_param())
                     return self.send(200 if ok else 404, "ok" if ok else "comando desconocido", "text/plain; charset=utf-8")
                 try:
                     obj = json.loads(body)
@@ -379,7 +444,9 @@ def make_handler(app):
                         raise ValueError
                 except ValueError:
                     return self.send(400, "JSON inválido", "text/plain; charset=utf-8")
-                app.store.add_telemetry(int(self.headers.get("X-XAD-Timestamp")), json.dumps(obj), app.now())
+                sym = obj.get("symbol")
+                inst = sym[:INSTANCE_MAX_LEN] if isinstance(sym, str) else ""
+                app.store.add_telemetry(int(self.headers.get("X-XAD-Timestamp")), json.dumps(obj), app.now(), inst)
                 return self.send(200, "ok", "text/plain; charset=utf-8")
             if path == "/api/login":
                 ip = self.client_ip()
@@ -407,12 +474,16 @@ def make_handler(app):
                 if not app.cfg.allow_commands:
                     return self.json(403, {"error": "los comandos remotos están desactivados"})
                 try:
-                    cmd = json.loads(body or "{}").get("cmd", "")
-                except ValueError:
-                    cmd = ""
+                    req = json.loads(body or "{}")
+                    cmd, target = req.get("cmd", ""), req.get("target", "*")
+                except (ValueError, AttributeError):
+                    cmd, target = "", "*"
                 if cmd not in ALLOWED_COMMANDS:
                     return self.json(400, {"error": "comando no permitido"})
-                cid = app.store.add_command(cmd, self.client_ip(), app.now())
+                if not isinstance(target, str) or (target != "*" and
+                                                   not any(i["instance"] == target for i in app.store.instances(app.now()))):
+                    return self.json(400, {"error": "instancia de destino desconocida"})
+                cid = app.store.add_command(cmd, self.client_ip(), app.now(), target)
                 return self.json(200, {"ok": True, "id": cid})
             return self.json(404, {"error": "no encontrado"})
 

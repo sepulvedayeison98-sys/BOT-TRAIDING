@@ -77,6 +77,19 @@ void TestCommands(CTestRunner &t)
    t.True(wb.Due(D'2026.01.14 12:00:00') && !wb.Due(D'2026.01.14 12:00:59') && wb.Due(D'2026.01.14 12:01:00'), "Due respeta el backoff");
   }
 
+//--- 1.2.0: varias instancias (un gráfico por símbolo)
+void TestInstance(CTestRunner &t)
+  {
+   t.True(CWebDashboard::UrlEncode("XAUUSD") == "XAUUSD", "UrlEncode sin cambios en ASCII seguro");
+   t.True(CWebDashboard::UrlEncode("Volatility 75 (1s) Index") == "Volatility%2075%20%281s%29%20Index",
+          "UrlEncode de espacios y paréntesis: " + CWebDashboard::UrlEncode("Volatility 75 (1s) Index"));
+   t.True(CWebDashboard::UrlEncode("a&b=ñ") == "a%26b%3D%C3%B1", "UrlEncode de reservados y UTF-8");
+   CWebDashboard wd;
+   t.True(wd.InstancePath("/api/ea/commands") == "/api/ea/commands", "sin instancia: ruta de 1.1.x");
+   wd.SetInstance("Boom 1000 Index");
+   t.True(wd.InstancePath("/api/ea/ack") == "/api/ea/ack?i=Boom%201000%20Index", "con instancia: ?i= dentro de la ruta firmada");
+  }
+
 void TestE2E(CTestRunner &t)
   {
    if(InpE2EUrl == "")
@@ -86,8 +99,9 @@ void TestE2E(CTestRunner &t)
      }
    CWebDashboard wd;
    t.True(wd.Init(true, InpE2EUrl, InpE2EToken, 10, false, NULL), "E2E: Init");
+   wd.SetInstance("Volatility 75 (1s) Index");   // ruta firmada con ?i= codificado
    string why;
-   string json = "{" + CWebDashboard::JsonStr("symbol", "XAUUSD") + "," + CWebDashboard::JsonNum("equity", 10050.25, 2) + "," +
+   string json = "{" + CWebDashboard::JsonStr("symbol", "Volatility 75 (1s) Index") + "," + CWebDashboard::JsonNum("equity", 10050.25, 2) + "," +
                  CWebDashboard::JsonStr("state", "RUNNING") + "," + CWebDashboard::JsonStr("last_signal", "prueba \"E2E\" ñ") + "}";
    string resp;
    int st = wd.Request("POST", "/api/ea/telemetry", json, resp, why);
@@ -112,6 +126,7 @@ void OnStart()
    TestHmac(t);
    TestJson(t);
    TestCommands(t);
+   TestInstance(t);
    TestE2E(t);
    t.Finish();
   }

@@ -41,6 +41,7 @@ XAUUSD_AUTONOMOUS/
 ├── Experts/XAUUSD_Autonomous.mq5      # Orquestador: eventos, ciclo, wiring
 ├── Include/XAUUSD/
 │   ├── Types.mqh            (*) enums, structs y constantes compartidas
+│   ├── InstrumentProfile.mqh perfil por instrumento: XAUUSD / sintético / Boom-Crash (1.2.0)
 │   ├── SessionClock.mqh     (*) conversión de zonas horarias y sesiones
 │   ├── StateStore.mqh       (*) persistencia atómica de estado
 │   ├── MarketEngine.mqh
@@ -195,10 +196,10 @@ sequenceDiagram
 | `ACCOUNT` | Cuenta real sin autorización explícita; trading algorítmico deshabilitado en terminal/EA/cuenta. |
 | `DATA` | Datos insuficientes, desactualizados o inválidos en cualquier TF. |
 | `CONNECTION` | `TERMINAL_CONNECTED` falso o último tick más viejo que el umbral. |
-| `SESSION` | Fuera de Londres/NY (convertido a hora servidor), o mercado cerrado según `SymbolInfoSessionTrade`. |
-| `NEWS` | Ventana de bloqueo activa o fuente de noticias no verificable (política conservadora). |
+| `SESSION` | Fuera de Londres/NY (convertido a hora servidor), o mercado cerrado según `SymbolInfoSessionTrade`. En índices sintéticos (1.2.0) solo cuenta la sesión del bróker: el filtro Londres/NY no aplica. |
+| `NEWS` | Ventana de bloqueo activa o fuente de noticias no verificable (política conservadora). No aplica a índices sintéticos. |
 | `DAILY_LIMIT` | Pérdida diaria ≥ límite. |
-| `SPREAD` | Spread > máximo absoluto o > k × spread medio. |
+| `SPREAD` | Spread > máximo (puntos en XAUUSD; fracción del ATR M15 en sintéticos). |
 | `REGIME` | Régimen = `NO_TRADE`. |
 | `PENDING` | Existe una solicitud de ejecución en estado incierto sin reconciliar. |
 

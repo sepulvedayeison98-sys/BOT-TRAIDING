@@ -1,7 +1,12 @@
 //+------------------------------------------------------------------+
 //| XAUUSD_Autonomous.mq5                                            |
 //| Expert Advisor autónomo e intradía para XAUUSD (H1/M15/M5),      |
-//| sesiones de Londres y Nueva York. Ver Documentation/.            |
+//| sesiones de Londres y Nueva York, y desde 1.2.0 para índices     |
+//| sintéticos de Deriv (Volatility/Step/Jump; Boom/Crash como       |
+//| experimental) con un perfil por instrumento: 24/7, sin filtro de |
+//| noticias y costes relativos al ATR. Un gráfico por símbolo; con  |
+//| la misma magic todos comparten exposición, posiciones y pérdida  |
+//| diaria. Ver Documentation/SYNTHETIC_INDICES.md.                  |
 //|                                                                  |
 //| Flujo en cada vela M5 cerrada:                                   |
 //|  MarketEngine -> RegimeEngine -> estrategias (SMC, Breakout,     |
@@ -16,12 +21,13 @@
 //|  - No promete rentabilidad: validar en backtest y demo.          |
 //+------------------------------------------------------------------+
 #property copyright "XAUUSD Autonomous Trading System"
-#property version   "1.12"
+#property version   "1.20"
 #property strict
-#property description "EA autónomo para XAUUSD con gestión estricta de riesgo. Trading real deshabilitado por defecto."
+#property description "EA autónomo para XAUUSD e índices sintéticos con gestión estricta de riesgo. Trading real deshabilitado por defecto."
 
 #include <XAUUSD/Types.mqh>
 #include <XAUUSD/Logger.mqh>
+#include <XAUUSD/InstrumentProfile.mqh>
 #include <XAUUSD/SessionClock.mqh>
 #include <XAUUSD/MarketEngine.mqh>
 #include <XAUUSD/RegimeEngine.mqh>
@@ -47,11 +53,20 @@ input long           InpMagic                 = 26101201;   // Número mágico
 input string         InpRunTag                = "live";     // Etiqueta de corrida (diario / Challenger)
 input bool           InpAllowRealAccount      = false;      // Permitir cuenta real (NO recomendado)
 input string         InpRealAccountConfirmation = "";       // Frase exacta: I UNDERSTAND THE RISK
-input bool           InpAllowAnySymbol        = false;      // Permitir símbolos distintos de XAUUSD (solo pruebas)
+input bool           InpAllowAnySymbol        = false;      // Permitir símbolos no reconocidos o perfil forzado (solo pruebas)
 input string         InpSymbolOverride        = "";         // Operar otro símbolo que el del gráfico (solo pruebas, requiere AllowAnySymbol)
 input bool           InpUseChampion           = true;       // Cargar modelo Champion aprobado si existe
 input bool           InpShowDashboard         = true;
 input ENUM_LOG_LEVEL InpPrintLevel            = LOG_INFO;
+
+input group "Instrumento (XAUUSD / índices sintéticos)"
+input ENUM_INSTRUMENT_PROFILE InpProfile      = PROFILE_AUTO; // Perfil (automático según el nombre del símbolo)
+input bool           InpAllowSpikeIndices     = false;      // Boom/Crash: activar el perfil experimental
+input bool           InpSpikeSideOnly         = true;       // Boom/Crash: solo en la dirección del spike (Boom compra, Crash vende)
+input double         InpSynthMaxSpreadAtr     = 0.15;       // Sintéticos: spread máximo (fracción del ATR M15)
+input double         InpSynthDeviationAtr     = 0.10;       // Sintéticos: desviación de la orden (fracción del ATR M15)
+input double         InpSynthEntryDriftAtr    = 0.10;       // Sintéticos: deriva máxima de entrada (fracción del ATR M15)
+input double         InpSynthBeOffsetAtr      = 0.02;       // Sintéticos: offset del break-even (fracción del ATR M15)
 
 input group "Riesgo (límites duros: riesgo<=2%, exposición<=5%, diario<=6%, R:R>=1)"
 input double         InpRiskPct               = 1.0;        // Riesgo por operación (%)
@@ -60,6 +75,7 @@ input int            InpMaxPositions          = 3;          // Posiciones simult
 input double         InpDailyLossPct          = 3.0;        // Pérdida diaria máxima (%)
 input int            InpDailyResetHour        = 0;          // Hora de reset diario (hora servidor)
 input ENUM_DAILY_LOSS_SCOPE InpDailyLossScope = DAILY_SCOPE_EA; // Pérdida diaria: solo operaciones del EA / toda la cuenta
+input bool           InpSharedPortfolio       = true;       // Compartir límites con los gráficos de otros símbolos con la misma magic
 input double         InpMinRR                 = 2.0;        // R:R mínimo
 input double         InpCommissionPerLot      = 0.0;        // Comisión ida y vuelta por lote (moneda cuenta)
 input double         InpSlippagePoints        = 0.0;        // Colchón de slippage al SL (puntos)
@@ -76,7 +92,7 @@ input bool           InpCloseOnInvalidation   = true;
 input int            InpManageThrottleMs      = 250;        // gestión protectora como máximo cada N ms
 
 input group "Ejecución"
-input int            InpMaxSpreadPoints       = 60;
+input int            InpMaxSpreadPoints       = 60;         // XAUUSD (en sintéticos se usa la fracción del ATR)
 input int            InpDeviationPoints       = 30;
 input int            InpMaxEntryDriftPoints   = 50;
 input int            InpMaxRetries            = 2;
@@ -139,6 +155,12 @@ CDashboard           g_dash;
 CWebDashboard        g_web;
 
 string               g_symbol = "";
+InstrumentProfile    g_profile;
+SyntheticCostConfig  g_synth_cost;
+CostLimits           g_cost_fixed;          // inputs en puntos (XAUUSD)
+CostLimits           g_cost;                // límites vigentes
+double               g_ext_money = 0.0;     // riesgo restante de la cartera en otros símbolos
+int                  g_ext_positions = 0;
 ENUM_EA_STATE        g_state = EA_INIT;
 string               g_state_reason = "";
 bool                 g_account_ok = false;
@@ -229,8 +251,9 @@ void AccountDayFlows(const datetime from, double &realized, double &deposits)
      }
   }
 
-//--- PnL propio del día (magic + símbolo): realizado desde `from` (beneficio, comisión y swap de
-//--- cada deal) + flotante de las posiciones propias abiertas (beneficio + swap).
+//--- PnL propio del día: realizado desde `from` (beneficio, comisión y swap de cada deal) +
+//--- flotante de las posiciones propias abiertas (beneficio + swap). Con cartera compartida cuenta
+//--- todos los símbolos con esta magic (todas las instancias ven la misma cifra); si no, solo este.
 double OwnDayPnL(const datetime from)
   {
    double pnl = 0.0;
@@ -238,15 +261,85 @@ double OwnDayPnL(const datetime from)
       for(int i = 0; i < HistoryDealsTotal(); i++)
         {
          ulong d = HistoryDealGetTicket(i);
-         if(d == 0 || HistoryDealGetInteger(d, DEAL_MAGIC) != InpMagic || HistoryDealGetString(d, DEAL_SYMBOL) != g_symbol)
+         if(d == 0 || HistoryDealGetInteger(d, DEAL_MAGIC) != InpMagic ||
+            (!InpSharedPortfolio && HistoryDealGetString(d, DEAL_SYMBOL) != g_symbol))
             continue;
          pnl += HistoryDealGetDouble(d, DEAL_PROFIT) + HistoryDealGetDouble(d, DEAL_COMMISSION) + HistoryDealGetDouble(d, DEAL_SWAP);
         }
-   PositionInfo pos[];
-   int n = g_gateway.Positions(g_symbol, InpMagic, pos);
-   for(int i = 0; i < n; i++)
-      pnl += pos[i].profit;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t) || PositionGetInteger(POSITION_MAGIC) != InpMagic ||
+         (!InpSharedPortfolio && PositionGetString(POSITION_SYMBOL) != g_symbol))
+         continue;
+      pnl += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+     }
    return pnl;
+  }
+
+//--- Cartera compartida: riesgo restante (SL) y número de posiciones con esta magic en OTROS
+//--- símbolos, con la especificación de cada uno (OrderCalcProfit). Una posición sin SL o cuyo
+//--- riesgo no se puede calcular cuenta como el riesgo máximo por operación (conservador).
+void RefreshPortfolio(void)
+  {
+   g_ext_money = 0.0;
+   g_ext_positions = 0;
+   if(InpSharedPortfolio)
+     {
+      double base = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY));
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+         ulong t = PositionGetTicket(i);
+         if(t == 0 || !PositionSelectByTicket(t) || PositionGetInteger(POSITION_MAGIC) != InpMagic)
+            continue;
+         string sym = PositionGetString(POSITION_SYMBOL);
+         if(sym == g_symbol)
+            continue;
+         g_ext_positions++;
+         double sl = PositionGetDouble(POSITION_SL);
+         double open = PositionGetDouble(POSITION_PRICE_OPEN);
+         double vol = PositionGetDouble(POSITION_VOLUME);
+         bool lng = ((ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+         double profit = 0.0;
+         if(sl > 0.0 && OrderCalcProfit(lng ? ORDER_TYPE_BUY : ORDER_TYPE_SELL, sym, vol, open, sl, profit))
+            g_ext_money += MathMax(0.0, -profit);
+         else
+            g_ext_money += base * InpRiskPct / 100.0;
+        }
+     }
+   g_risk.SetExternalExposure(g_ext_money, g_ext_positions);
+  }
+
+//--- Límites de coste vigentes (fijos en XAUUSD, relativos al ATR M15 en sintéticos)
+void UpdateCostLimits(void)
+  {
+   CostLimits c;
+   if(!CInstrumentProfiles::Limits(g_profile, g_cost_fixed, g_synth_cost, g_snap_valid ? g_snap.m15.atr[0] : 0.0, g_spec.point, c))
+      return;
+   if(c.max_spread_points == g_cost.max_spread_points && c.deviation_points == g_cost.deviation_points &&
+      c.entry_drift_points == g_cost.entry_drift_points && c.be_offset_points == g_cost.be_offset_points)
+      return;
+   g_cost = c;
+   g_exec.SetCostLimits(c.max_spread_points, c.deviation_points, c.entry_drift_points);
+   g_pos.SetCostLimits(c.be_offset_points, c.deviation_points);
+   if(g_profile.atr_costs)
+      g_log.Debug("EA", "COST_LIMITS", StringFormat("ATR M15 %.5g: spread máx %d, desviación %d, deriva %d, offset BE %d puntos",
+                                                    g_snap.m15.atr[0], c.max_spread_points, c.deviation_points,
+                                                    c.entry_drift_points, c.be_offset_points));
+  }
+
+//--- Estado de noticias cuando el perfil no las usa (índices sintéticos)
+NewsState NoNewsState(void)
+  {
+   NewsState n;
+   ZeroMemory(n);
+   n.blocked = false;
+   n.minutes_to_next = -1;
+   n.source_ok = true;
+   n.source = "N/A";
+   n.reason = "no aplica a este instrumento";
+   n.next_name = "";
+   return n;
   }
 
 //--- Con alcance EA, actualiza el PnL propio del día antes de evaluar la pérdida diaria
@@ -443,15 +536,28 @@ int OnInit()
    g_log.Init("XAUUSD_Autonomous", LOG_DEBUG, InpPrintLevel);
    g_log.Info("EA", "START", StringFormat("versión %s símbolo %s magic %s tester=%s run=%s", XAU_PROJECT_VERSION,
                                           g_symbol, IntegerToString(InpMagic), (g_tester ? "sí" : "no"), InpRunTag));
-   //--- símbolo
-   string up = g_symbol;
-   StringToUpper(up);
-   if(StringFind(up, "XAUUSD") < 0 && !InpAllowAnySymbol)
+   //--- símbolo y perfil del instrumento
+   string why;
+   if(!CInstrumentProfiles::Resolve(g_symbol, InpProfile, InpAllowAnySymbol, InpAllowSpikeIndices, InpSpikeSideOnly, g_profile, why))
      {
-      g_log.Critical("EA", "WRONG_SYMBOL", "este EA es exclusivo para XAUUSD: " + g_symbol);
+      g_log.Critical("EA", "WRONG_SYMBOL", why);
       return INIT_PARAMETERS_INCORRECT;
      }
-   string why;
+   g_log.Info("EA", "PROFILE", StringFormat("perfil %s (%s): sesiones %s, noticias %s, costes %s%s", EnumProfileToString(g_profile.id),
+                                            g_profile.family, (g_profile.use_sessions ? "Londres/NY" : "24/7"),
+                                            (g_profile.use_news ? "USD" : "no aplica"), (g_profile.atr_costs ? "relativos al ATR M15" : "en puntos"),
+                                            (g_profile.only_dir == DIR_NONE ? "" : ", solo " + EnumDirectionToString(g_profile.only_dir) +
+                                             " (dirección del spike)")));
+   SyntheticCostDefaultConfig(g_synth_cost);
+   g_synth_cost.max_spread_atr = InpSynthMaxSpreadAtr;
+   g_synth_cost.deviation_atr = InpSynthDeviationAtr;
+   g_synth_cost.entry_drift_atr = InpSynthEntryDriftAtr;
+   g_synth_cost.be_offset_atr = InpSynthBeOffsetAtr;
+   if(g_profile.atr_costs && !SyntheticCostValidateConfig(g_synth_cost, why))
+     {
+      g_log.Critical("EA", "CONFIG_INVALID", why);
+      return INIT_PARAMETERS_INCORRECT;
+     }
    if(!SymbolSpecLoad(g_symbol, g_spec, why))
      {
       g_log.Critical("EA", "SPEC_INVALID", why);
@@ -497,6 +603,7 @@ int OnInit()
    common.pivot_n_m15 = mcfg.pivot_n_m15;
    common.pivot_n_m5 = mcfg.pivot_n_m5;
    SMCConfig smc;          SMCDefaultConfig(smc);
+   smc.use_asia_range = g_profile.use_asia_range;
    BreakoutConfig bo;      BreakoutDefaultConfig(bo);
    ReversalConfig rv;      ReversalDefaultConfig(rv);
    AdaptiveConfig acfg;
@@ -510,7 +617,7 @@ int OnInit()
    if(InpUseChampion)
      {
       string keys[], vals[], ver;
-      if(CLearningEngine::LoadChampion("XAUUSD/champion.model", true, keys, vals, ver, why))
+      if(CLearningEngine::LoadChampion(CInstrumentProfiles::ChampionFile(g_profile, g_symbol), true, keys, vals, ver, why))
         {
          string why2;
          if(CLearningEngine::ApplyChampion(keys, vals, acfg, rcfg, smc, bo, rv, g_smc_on, g_bo_on, g_rv_on, why2))
@@ -539,6 +646,11 @@ int OnInit()
    ecfg.deviation_points = InpDeviationPoints;
    ecfg.max_entry_drift_points = InpMaxEntryDriftPoints;
    ecfg.max_retries = InpMaxRetries;
+   g_cost_fixed.max_spread_points = InpMaxSpreadPoints;
+   g_cost_fixed.deviation_points = InpDeviationPoints;
+   g_cost_fixed.entry_drift_points = InpMaxEntryDriftPoints;
+   g_cost_fixed.be_offset_points = InpBreakEvenOffsetPts;
+   g_cost = g_cost_fixed;
    PositionConfig pcfg;
    PositionDefaultConfig(pcfg);
    pcfg.magic = InpMagic;
@@ -571,6 +683,19 @@ int OnInit()
      {
       g_log.Critical("EA", "INIT_FAILED", "configuración inválida del dashboard web");
       return INIT_PARAMETERS_INCORRECT;
+     }
+   g_web.SetInstance(g_symbol);
+   if(g_profile.atr_costs)
+     {
+      // hasta tener ATR (primera vela con datos válidos) no se abren operaciones; para la gestión
+      // de posiciones recuperadas: offset BE 0 (el break-even ya suma el spread) y desviación = spread
+      MqlTick tk;
+      int spread_pts = (SymbolInfoTick(g_symbol, tk) && g_spec.point > 0.0) ? (int)MathRound((tk.ask - tk.bid) / g_spec.point) : 0;
+      g_cost.be_offset_points = 0;
+      g_cost.deviation_points = MathMax(0, spread_pts);
+      g_cost.max_spread_points = 1;
+      g_cost.entry_drift_points = 0;
+      g_pos.SetCostLimits(g_cost.be_offset_points, g_cost.deviation_points);
      }
    g_daily.Configure(InpDailyResetHour, InpDailyLossPct);
    g_daily.SetScope(InpDailyLossScope);
@@ -607,7 +732,11 @@ int OnInit()
          EnterSafeMode("posición " + IntegerToString((long)pos[i].ticket) + " sin Stop Loss al iniciar");
    g_log.Info("EA", "RECOVERED", StringFormat("%d posiciones propias, %d metadatos, pendiente=%s", n, g_pos.MetaCount(),
                                               (g_exec.HasPending() ? "sí" : "no")));
-   g_news.Refresh(now);
+   if(g_profile.use_news)
+      g_news.Refresh(now);
+   else
+      g_news_state = NoNewsState();
+   RefreshPortfolio();
    g_dash_on = InpShowDashboard && (!g_tester || MQLInfoInteger(MQL_VISUAL_MODE) != 0) && MQLInfoInteger(MQL_OPTIMIZATION) == 0;
    if(g_dash_on)
       g_dash.Init(0, "XAD_");
@@ -668,10 +797,10 @@ bool EntryGates(string &reasons)
       reasons += "DATOS: " + g_snap.invalid_reason + "; ";
    else
      {
-      if(g_snap.session == SESSION_NONE)
+      if(g_profile.use_sessions && g_snap.session == SESSION_NONE)
          reasons += "SESIÓN: fuera de Londres/Nueva York; ";
-      if(g_snap.spread_points > InpMaxSpreadPoints)
-         reasons += StringFormat("SPREAD: %.0f > %d puntos; ", g_snap.spread_points, InpMaxSpreadPoints);
+      if(g_snap.spread_points > g_cost.max_spread_points)
+         reasons += StringFormat("SPREAD: %.0f > %d puntos; ", g_snap.spread_points, g_cost.max_spread_points);
      }
    if(!g_gateway.MarketOpen(g_symbol, why))
       reasons += "MERCADO: " + why + "; ";
@@ -697,7 +826,9 @@ void Pipeline(void)
    else
       g_log.LogOnChange("snapshot", "ok", LOG_INFO, "EA", "DATA_OK", "datos válidos");
    g_regime.Evaluate(g_snap, g_regime_state);
-   g_news_state = g_news.Evaluate(TimeTradeServer());
+   g_news_state = g_profile.use_news ? g_news.Evaluate(TimeTradeServer()) : NoNewsState();
+   if(g_snap_valid)
+      UpdateCostLimits();
    if(!g_snap_valid)
      {
       EntryGates(g_blocks);
@@ -711,6 +842,24 @@ void Pipeline(void)
    if(g_rv_on)  g_rv.Evaluate(g_snap, g_regime_state, sigs);
    for(int i = 0; i < ArraySize(sigs); i++)
       g_log.Info("EA", "SIGNAL", CStrategyBase::Describe(sigs[i]), sigs[i].signal_id);
+   //--- Boom/Crash: fuera las señales contra el spike (el SL podría saltarse con el spike)
+   if(g_profile.only_dir != DIR_NONE)
+     {
+      int k = 0;
+      for(int i = 0; i < ArraySize(sigs); i++)
+        {
+         if(!CInstrumentProfiles::DirectionAllowed(g_profile, sigs[i].direction))
+           {
+            g_log.Info("EA", "SIGNAL_FILTERED", "contra la dirección del spike de " + g_profile.family + ": " +
+                       EnumDirectionToString(sigs[i].direction), sigs[i].signal_id);
+            continue;
+           }
+         if(k != i)
+            sigs[k] = sigs[i];
+         k++;
+        }
+      ArrayResize(sigs, k);
+     }
    //--- coordinación
    PositionInfo pos[];
    g_pos.Sync(pos);
@@ -743,6 +892,7 @@ void Pipeline(void)
    AccountSnapshot acc = Account();
    int losses = g_pos.ConsecutiveLosses(TimeTradeServer() - 30 * 86400, TimeTradeServer() + 60);
    RefreshDailyOwnPnL();
+   RefreshPortfolio();
    RiskDecision rd = g_risk.Assess(sig, g_spec, acc, risks, g_daily, (tk.ask - tk.bid) / g_spec.point, losses);
    if(!rd.approved)
      {
@@ -811,7 +961,8 @@ void OnTimer()
          g_log.LogOnChange("clock", g_clock.LastError(), LOG_ERROR, "EA", "CLOCK_INVALID", g_clock.LastError());
       g_log.SetUtcOffset(g_clock.ServerOffsetAt(now));
      }
-   g_news.Refresh(now);
+   if(g_profile.use_news)
+      g_news.Refresh(now);
    //--- pérdida diaria
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
    if(g_daily.Update(now, equity))
@@ -825,6 +976,7 @@ void OnTimer()
    if(g_daily.LimitReached(equity) && g_state == EA_RUNNING)
       SetState(EA_DAILY_LIMIT, StringFormat("pérdida diaria %.2f%% >= %.2f%%", g_daily.LossPct(equity), InpDailyLossPct));
    g_peak_equity = MathMax(g_peak_equity, equity);
+   RefreshPortfolio();
    //--- reconciliación
    if(g_exec.HasPending())
      {
@@ -876,9 +1028,9 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
       return;
    ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
    long pid = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
-   g_log.Info("EA", "DEAL", StringFormat("deal %s %s posición %s precio %.2f volumen %.2f comisión %.2f",
+   g_log.Info("EA", "DEAL", StringFormat("deal %s %s posición %s precio %.*f volumen %.*f comisión %.2f",
                                          IntegerToString((long)trans.deal), EnumToString(entry), IntegerToString(pid),
-                                         HistoryDealGetDouble(trans.deal, DEAL_PRICE), HistoryDealGetDouble(trans.deal, DEAL_VOLUME),
+                                         g_spec.digits, HistoryDealGetDouble(trans.deal, DEAL_PRICE), VolumeDigits(), HistoryDealGetDouble(trans.deal, DEAL_VOLUME),
                                          HistoryDealGetDouble(trans.deal, DEAL_COMMISSION)));
    if(entry == DEAL_ENTRY_IN)
      {
@@ -963,7 +1115,8 @@ void UpdateDashboard(void)
    d.account = EnumToString((ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE)) + (g_netting ? " Netting" : " Hedging");
    d.times = StringFormat("srv %s / UTC %s / COL %s", TimeToString(srv, TIME_MINUTES), TimeToString(utc, TIME_MINUTES),
                           TimeToString(CSessionClock::UtcToColombia(utc), TIME_MINUTES));
-   d.session = g_snap_valid ? EnumSessionToString(g_snap.session) : "—";
+   d.session = !g_profile.use_sessions ? "24/7 (" + EnumProfileToString(g_profile.id) + ", sin filtro de sesión)" :
+               (g_snap_valid ? EnumSessionToString(g_snap.session) : "—");
    d.regime = EnumRegimeToString(g_regime_state.regime) + " (raw " + EnumRegimeToString(g_regime_state.raw_regime) + ")";
    d.h1_trend = g_snap_valid ? StringFormat("%s, ADX %.1f, EMA50 %s EMA200", EnumStructureToString(g_snap.h1.structure), g_snap.h1.adx[0],
                                             (g_snap.h1.ema_fast[0] > g_snap.h1.ema_slow[0] ? ">" : "<")) : "—";
@@ -971,17 +1124,18 @@ void UpdateDashboard(void)
    d.m5_confirmation = g_snap_valid ? StringFormat("pendiente %.2f, cambio de momentum %s", g_snap.m5.ema_slope, (g_snap.m5.momentum_shift ? "sí" : "no")) : "—";
    d.strategy = g_last_proposal.valid ? EnumStrategyToString(g_last_proposal.signal.strategy) : "—";
    d.score = (g_last_proposal.candidates > 0) ? StringFormat("%.0f (%s)", g_last_proposal.score.total, EnumQualityToString(g_last_proposal.quality)) : "—";
-   d.spread = g_snap_valid ? StringFormat("%.0f (media %.0f)", g_snap.spread_points, g_snap.spread_avg_points) : "—";
-   d.atr = g_snap_valid ? StringFormat("%.2f (M15)", g_snap.m15.atr[0]) : "—";
+   d.spread = g_snap_valid ? StringFormat("%.0f (media %.0f, máx %d)", g_snap.spread_points, g_snap.spread_avg_points, g_cost.max_spread_points) : "—";
+   d.atr = g_snap_valid ? StringFormat("%.*f (M15)", MathMin(g_spec.digits, 5), g_snap.m15.atr[0]) : "—";
    d.rsi = g_snap_valid ? StringFormat("%.1f (M15)", g_snap.m15.rsi[0]) : "—";
    PositionInfo pos[];
    int n = g_gateway.Positions(g_symbol, InpMagic, pos);
-   d.positions = IntegerToString(n);
+   d.positions = IntegerToString(n) + (g_ext_positions > 0 ? StringFormat(" (+%d en otros símbolos)", g_ext_positions) : "");
    PositionRisk risks[];
    CPositionManager::Risks(pos, risks);
    double exp_money = 0.0;
    string why;
    g_risk.ExistingExposure(risks, exp_money, why);
+   exp_money += g_ext_money;
    double base = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), equity);
    d.risk_per_trade = StringFormat("%.2f%%", g_risk.EffectiveRiskPct(0));
    d.exposure = (base > 0) ? StringFormat("%.2f%%", exp_money / base * 100.0) : "—";
@@ -989,7 +1143,8 @@ void UpdateDashboard(void)
                                (g_daily.Scope() == DAILY_SCOPE_EA ? "EA" : "cuenta"));
    d.daily_gain = StringFormat("%.2f%%", g_daily.GainPct(equity));
    d.drawdown = (g_peak_equity > 0) ? StringFormat("%.2f%% desde el máximo", (g_peak_equity - equity) / g_peak_equity * 100.0) : "—";
-   d.news = g_news_state.blocked ? "BLOQUEO: " + g_news_state.reason :
+   d.news = !g_profile.use_news ? "no aplica (índice sintético)" :
+            g_news_state.blocked ? "BLOQUEO: " + g_news_state.reason :
             (g_news_state.minutes_to_next >= 0 ? StringFormat("libre (próximo: %s en %d min)", g_news_state.next_name, g_news_state.minutes_to_next) : "libre");
    d.last_signal = g_last_signal_text;
    d.last_trade = g_last_trade_text;
@@ -1009,8 +1164,17 @@ double CurrentExposurePct(int &npos)
    double exp_money = 0.0;
    string why;
    g_risk.ExistingExposure(risks, exp_money, why);
+   exp_money += g_ext_money;   // cartera compartida: también el riesgo abierto en otros símbolos
    double base = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY));
    return (base > 0.0) ? exp_money / base * 100.0 : 0.0;
+  }
+
+//--- Decimales del volumen según el paso del símbolo (sintéticos con lotes de 0.001)
+int VolumeDigits(void)
+  {
+   if(g_spec.volume_step <= 0.0)
+      return 2;
+   return (int)MathMax(2, MathMin(8, MathCeil(-MathLog10(g_spec.volume_step) - 1e-9)));
   }
 
 string TelemetryJson(void)
@@ -1020,7 +1184,8 @@ string TelemetryJson(void)
    StringReplace(mode, "ACCOUNT_TRADE_MODE_", "");
    int npos = 0;
    double exposure = CurrentExposurePct(npos);
-   string news = g_news_state.blocked ? "BLOQUEO: " + g_news_state.reason :
+   string news = !g_profile.use_news ? "no aplica (índice sintético)" :
+                 g_news_state.blocked ? "BLOQUEO: " + g_news_state.reason :
                  (g_news_state.minutes_to_next >= 0 ? StringFormat("libre (próximo: %s en %d min)", g_news_state.next_name, g_news_state.minutes_to_next) : "libre");
    string j = "{";
    j += CWebDashboard::JsonStr("version", XAU_PROJECT_VERSION) + ",";
@@ -1039,6 +1204,16 @@ string TelemetryJson(void)
    j += CWebDashboard::JsonNum("exposure_pct", exposure, 2) + ",";
    j += CWebDashboard::JsonNum("risk_pct", g_risk.EffectiveRiskPct(0), 2) + ",";
    j += CWebDashboard::JsonNum("positions", npos, 0) + ",";
+   //--- 1.2.0: perfil del instrumento y cartera compartida
+   j += CWebDashboard::JsonStr("profile", EnumProfileToString(g_profile.id)) + ",";
+   j += CWebDashboard::JsonStr("family", g_profile.family) + ",";
+   j += CWebDashboard::JsonBool("uses_sessions", g_profile.use_sessions) + ",";
+   j += CWebDashboard::JsonBool("uses_news", g_profile.use_news) + ",";
+   j += CWebDashboard::JsonStr("only_dir", g_profile.only_dir == DIR_NONE ? "" : (g_profile.only_dir == DIR_LONG ? "BUY" : "SELL")) + ",";
+   j += CWebDashboard::JsonNum("spread_max", g_cost.max_spread_points, 0) + ",";
+   j += CWebDashboard::JsonBool("shared_portfolio", InpSharedPortfolio) + ",";
+   j += CWebDashboard::JsonNum("portfolio_positions", npos + g_ext_positions, 0) + ",";
+   j += CWebDashboard::JsonNum("digits", g_spec.digits, 0) + ",";
    j += CWebDashboard::JsonNum("drawdown_pct", (g_peak_equity > 0) ? (g_peak_equity - equity) / g_peak_equity * 100.0 : 0.0, 2) + ",";
    j += CWebDashboard::JsonStr("regime", EnumRegimeToString(g_regime_state.regime)) + ",";
    j += CWebDashboard::JsonStr("session", g_snap_valid ? EnumSessionToString(g_snap.session) : "") + ",";
@@ -1046,7 +1221,7 @@ string TelemetryJson(void)
      {
       j += CWebDashboard::JsonNum("spread", g_snap.spread_points, 1) + ",";
       j += CWebDashboard::JsonNum("spread_avg", g_snap.spread_avg_points, 1) + ",";
-      j += CWebDashboard::JsonNum("atr_m15", g_snap.m15.atr[0], 2) + ",";
+      j += CWebDashboard::JsonNum("atr_m15", g_snap.m15.atr[0], MathMin(g_spec.digits, 5)) + ",";
       j += CWebDashboard::JsonNum("rsi_m15", g_snap.m15.rsi[0], 1) + ",";
      }
    //--- 1.1.2: datos para el dashboard (límites, PnL propio, contexto, noticias, posiciones)
@@ -1089,7 +1264,7 @@ string TelemetryJson(void)
          arr += ",";
       arr += "{" + CWebDashboard::JsonNum("ticket", (double)pos[i].ticket, 0) + "," +
              CWebDashboard::JsonStr("dir", pos[i].direction == DIR_LONG ? "BUY" : "SELL") + "," +
-             CWebDashboard::JsonNum("volume", pos[i].volume, 2) + "," +
+             CWebDashboard::JsonNum("volume", pos[i].volume, VolumeDigits()) + "," +
              CWebDashboard::JsonNum("open", pos[i].open_price, (int)g_spec.digits) + "," +
              CWebDashboard::JsonNum("sl", pos[i].sl, (int)g_spec.digits) + "," +
              CWebDashboard::JsonNum("tp", pos[i].tp, (int)g_spec.digits) + "," +

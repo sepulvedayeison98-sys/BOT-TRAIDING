@@ -3,7 +3,8 @@
 # 127.0.0.1 + cliente MQL5 (Test_WebDashboard.mq5) en el terminal MT5 bajo Wine.
 # 1) arranca el servidor con un token temporal, 2) encola un comando PAUSE,
 # 3) el script MQL5 envía telemetría firmada, recibe y verifica el comando y lo confirma,
-# 4) se comprueba en la base de datos del servidor.
+# 4) se comprueba en la base de datos del servidor (instancia "Volatility 75 (1s) Index": la
+#    consulta ?i= codificada viaja dentro de la ruta firmada).
 # REQUISITO: http://127.0.0.1:8080 debe estar en Herramientas > Opciones > Asesores Expertos >
 # "Permitir WebRequest para las URL listadas" de ESTE terminal (se guarda cifrado en
 # Config/common.ini; las claves WebRequest/WebRequestUrl en texto plano de un .ini de arranque
@@ -47,9 +48,13 @@ import sqlite3, json
 db = sqlite3.connect("$XAD_DB")
 t = db.execute("SELECT body FROM telemetry ORDER BY rowid DESC LIMIT 1").fetchone()
 c = db.execute("SELECT id, cmd, delivered, acked FROM commands").fetchall()
+inst = db.execute("SELECT instance FROM telemetry ORDER BY rowid DESC LIMIT 1").fetchone()
+acks = db.execute("SELECT cmd_id, instance FROM command_acks").fetchall()
 print("telemetría recibida:", json.loads(t[0]) if t else None)
-print("comandos:", c)
-ok = bool(t) and json.loads(t[0]).get("last_signal") == 'prueba "E2E" ñ' and c and c[0][3] > 0
+print("comandos:", c, "confirmaciones:", acks)
+want = "Volatility 75 (1s) Index"   # instancia del script MQL5: la ruta ?i= firmada llega decodificada
+ok = (bool(t) and json.loads(t[0]).get("last_signal") == 'prueba "E2E" ñ' and c and c[0][3] > 0
+      and inst and inst[0] == want and (c[0][0], want) in acks)
 print("E2E:", "PASS" if ok else "FAIL")
 raise SystemExit(0 if ok else 1)
 PY

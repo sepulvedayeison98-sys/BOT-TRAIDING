@@ -207,6 +207,16 @@ public:
       return false;
      }
 
+   //--- Offset de break-even y desviación en puntos (perfiles sintéticos: relativos al ATR)
+   bool              SetCostLimits(const int be_offset_points, const int deviation_points)
+     {
+      if(be_offset_points < 0 || deviation_points < 0)
+         return false;
+      m_cfg.be_offset_points = be_offset_points;
+      m_cfg.deviation_points = deviation_points;
+      return true;
+     }
+
    bool              CriticalFlag(void) const      { return m_critical; }
    string            CriticalReason(void) const    { return m_critical_reason; }
    void              ClearCritical(void)           { m_critical = false; m_critical_reason = ""; }

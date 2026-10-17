@@ -138,6 +138,15 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 - `SYMBOL_TRADE_TICK_VALUE_LOSS` puede ser 0 cuando no hay conversión de divisa disponible: se usa `SYMBOL_TRADE_TICK_VALUE` con advertencia en el log (el riesgo se verifica además contra `OrderCalcProfit`).
 - Mejora de robustez: el temporizador (1 s) también ejecuta la gestión protectora y la detección de vela nueva, para que la protección no dependa de que lleguen ticks al gráfico.
 
+### Índices sintéticos y cartera compartida (1.2.0) — 2026-10-17
+- `Test_Instruments.mq5` → **44/44**: familia por nombre (XAUUSD con sufijo, Volatility y `(1s)`, Boom, Crash, Step, Jump, EURUSD no reconocido); resolución del perfil (oro sin cambios, sintético sin sesiones/noticias/rango asiático, Boom/Crash solo con `InpAllowSpikeIndices`, lado del spike, perfil forzado incoherente rechazado salvo `InpAllowAnySymbol`); límites relativos al ATR (cálculo, sin ATR se conservan, mínimo 1 punto, tope sin desbordar); validación; ruta del Champion por símbolo.
+- `Test_Phase6.mq5` → **112/112** (+9 de cartera compartida): riesgo en otros símbolos en la exposición, rechazo por exposición y por posiciones de la cartera, peor caso del día con riesgo externo, valores negativos acotados.
+- `Test_WebDashboard.mq5` → **33/33** (+5: `UrlEncode`, ruta con instancia). E2E con MT5 real → **39/39**, con la instancia "Volatility 75 (1s) Index": WinINet envía `?i=Volatility%2075%20%281s%29%20Index` sin alterarlo y la firma coincide; telemetría guardada con su instancia y confirmación registrada para ella.
+- `WebDashboard/tests/test_server.py` → **29 tests OK** (+4): estado por instancia, comandos dirigidos y para todas con confirmación por instancia, consulta `?i=` cubierta por la firma, migración de una base 1.1.x (los EA 1.1.x siguen recibiendo comandos).
+- Prueba de humo del EA con el perfil sintético forzado (`SMOKE_PROFILE=synth`) → **12/12**: perfil aplicado, ninguna vela bloqueada por sesión ni noticias, límites de coste recalculados con el ATR (p. ej. ATR M15 2,24 → spread máx 34, desviación 22, deriva 22, offset BE 4 puntos).
+- Interfaz revisada en Chromium con tres instancias (XAUUSD, Volatility 75, Boom 1000): selector, "24/7", noticias "no aplica", destino de comandos y "Aplicado N de M"; oscuro, claro y 390 px sin errores de consola ni desplazamiento horizontal.
+- **No probado:** símbolos reales de Deriv, backtest ni demo en sintéticos.
+
 ### Rediseño del dashboard (1.1.2)
 - `WebDashboard/tests/test_server.py` → **25 tests OK** (nuevo: tipografías servidas localmente con `font/woff2`, sin peticiones a Google).
 - E2E cliente MQL5 ↔ servidor → 34/34; EA completo + dashboard (`SMOKE_WEB=1`) → 15/15 con la telemetría ampliada (JSON válido, posiciones como lista).
@@ -160,6 +169,8 @@ La verificación con `OrderCalcProfit` real de XAUUSD en Deriv queda para tu ter
 - La serie de equity tenía un límite de 720 filas (≈ 6 h a 30 s, no 3 días): ahora se agrega por intervalos (prueba añadida).
 
 ## 8. Lo que falta validar (requiere tu terminal y cuenta demo)
+
+Para los índices sintéticos, la lista de [SYNTHETIC_INDICES.md §4](SYNTHETIC_INDICES.md) (especificación, historial, backtest y demo por símbolo).
 
 | # | Prueba (Fase 12–13) | Cómo | Criterio |
 |---|---|---|---|

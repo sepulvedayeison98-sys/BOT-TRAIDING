@@ -9,6 +9,7 @@ Solo visible desde ese PC (no desde el celular); no necesita dominio ni certific
    - La primera vez te pide la contraseña para entrar a la web (≥ 12 caracteres) y guarda el token, el secreto y el hash en `%USERPROFILE%\.xad\xad.env` (fuera del repositorio).
    - Muestra los valores para el EA (el token queda copiado en el portapapeles), arranca el servidor en `http://127.0.0.1:8080` y abre el navegador.
 3. En MT5: añade `http://127.0.0.1:8080` en *Opciones → Asesores Expertos → WebRequest* y pon en el EA `InpWebEnabled=true`, `InpWebUrl=http://127.0.0.1:8080`, `InpWebToken=<token>`.
+   Con varios gráficos (por ejemplo XAUUSD y Volatility 75), pon los mismos tres valores en cada uno: el dashboard muestra una fila *Instancias* para elegir cuál ver y los comandos pueden ir a una o a todas.
 4. Deja abierta la ventana del servidor; `Ctrl+C` lo detiene. Para cambiar las claves: `powershell -ExecutionPolicy Bypass -File iniciar_dashboard.ps1 -Reset` (y actualiza `InpWebToken`). Otro puerto: `-Port 8081`.
 
 > El lanzador se probó con PowerShell 7 en Linux (primera configuración, arranque, acceso con contraseña); no se ha ejecutado en un Windows real. Si algo falla, el mensaje de error de esa ventana indica la causa.
