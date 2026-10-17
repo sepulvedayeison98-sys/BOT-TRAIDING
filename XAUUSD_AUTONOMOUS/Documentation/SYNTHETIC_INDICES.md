@@ -74,7 +74,27 @@ Los EA 1.1.x siguen funcionando con el servidor nuevo y aparecen como una instan
 6. **Backtest** en el Strategy Tester con "Cada tick basado en ticks reales" si el historial de ticks está disponible, antes de dejarlo en demo. El criterio de `OnTester` es el mismo.
 7. **Champion por símbolo.** XAUUSD sigue usando `XAUUSD/champion.model`. Los demás buscan `XAUUSD/champion_<símbolo>.model`, con espacios y paréntesis cambiados por `_` (por ejemplo `champion_Volatility_75_Index.model`). Sin ese archivo usan los parámetros por defecto. **No copies el modelo del oro a un sintético.**
 
-## 5. Verificación realizada (entorno de desarrollo, sin cuenta Deriv)
+## 5. Ensayo en la demo de Deriv (2026-10-17, cuenta DEMO, Hedging)
+Volatility 75 Index tal como lo informa el terminal:
+
+| Dato | Valor |
+|---|---|
+| Dígitos / contrato | 2 / 1 |
+| Volumen | mínimo 0.01, máximo 15, paso 0.001 |
+| Stops level | 10 770 puntos (107,70 en precio) |
+| Spread | ≈ 1 551 puntos (15,51) |
+| ATR M15 | ≈ 213,38 → spread máximo calculado 3 201 puntos (0,15 ATR) |
+
+Resultado del EA 1.2.0:
+- Arranque correcto con `perfil SINTETICO (Volatility)`, pérdida diaria 0 % (alcance EA) y datos válidos, sin avisos.
+- Panel: 24/7 y noticias "no aplica". Único bloqueo: `RÉGIMEN NO_TRADE` con ADX 19,8 en la zona neutral (18–22).
+
+Implicaciones:
+- **El stops level es grande**: ≈ 0,5 ATR M15. El SL y el TP deben quedar a más de 107,70 + spread del precio. El RiskManager rechaza las señales más cortas ("SL/TP más cerca que el stops level"), así que en V75 se descartarán setups de SL estrecho.
+- **Cada cambio de temporalidad del gráfico reinicia el EA** (`STOP reason=3` → `START`). Es el comportamiento normal de MT5; el estado se guarda y se restaura.
+- **Los umbrales de régimen** (ADX 18/22, ratios de ATR) son los del oro. Hay que medir con `RegimeLogger` + `regime_report.py` en V75 cuánto tiempo pasa en la zona neutral antes de cambiarlos.
+
+## 6. Verificación realizada (entorno de desarrollo, sin cuenta Deriv)
 - `Test_Instruments.mq5`: 44/44 (detección por nombre, protecciones, lado del spike, límites relativos al ATR, nombres de archivo).
 - `Test_Phase6.mq5`: 112/112, con 9 pruebas de cartera compartida (exposición, posiciones y peor caso del día con riesgo en otros símbolos).
 - `Test_WebDashboard.mq5`: 33/33. E2E con MT5 real: 39/39, con la instancia "Volatility 75 (1s) Index" en la ruta firmada.
